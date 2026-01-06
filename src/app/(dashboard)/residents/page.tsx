@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
 import { Header } from '@/components/layout/header';
 import { DataTable } from '@/components/data-table';
 import { Button } from '@/components/ui/button';
@@ -61,6 +62,10 @@ interface PaginationState {
 }
 
 export default function ResidentsPage() {
+  const t = useTranslations('residents');
+  const tApartments = useTranslations('apartments');
+  const tCommon = useTranslations('common');
+  const tErrors = useTranslations('errors');
   const [residents, setResidents] = useState<Resident[]>([]);
   const [apartments, setApartments] = useState<Apartment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -97,11 +102,11 @@ export default function ResidentsPage() {
         setPagination(result.data.pagination);
       }
     } catch (error) {
-      toast.error('Failed to fetch residents');
+      toast.error(tErrors('loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [pagination.page, pagination.limit, search, statusFilter]);
+  }, [pagination.page, pagination.limit, search, statusFilter, tErrors]);
 
   const fetchApartments = async () => {
     try {
@@ -144,14 +149,14 @@ export default function ResidentsPage() {
       const result = await response.json();
 
       if (result.success) {
-        toast.success('Resident created successfully');
+        toast.success(t('residentCreated'));
         setIsCreateOpen(false);
         fetchResidents();
       } else {
-        toast.error(result.error || 'Failed to create resident');
+        toast.error(result.error || tErrors('createFailed'));
       }
     } catch (error) {
-      toast.error('Failed to create resident');
+      toast.error(tErrors('createFailed'));
     } finally {
       setFormLoading(false);
     }
@@ -181,15 +186,15 @@ export default function ResidentsPage() {
       const result = await response.json();
 
       if (result.success) {
-        toast.success('Resident updated successfully');
+        toast.success(t('residentUpdated'));
         setIsEditOpen(false);
         setSelectedResident(null);
         fetchResidents();
       } else {
-        toast.error(result.error || 'Failed to update resident');
+        toast.error(result.error || tErrors('updateFailed'));
       }
     } catch (error) {
-      toast.error('Failed to update resident');
+      toast.error(tErrors('updateFailed'));
     } finally {
       setFormLoading(false);
     }
@@ -209,16 +214,16 @@ export default function ResidentsPage() {
       const result = await response.json();
 
       if (result.success) {
-        toast.success('Resident moved out successfully');
+        toast.success(t('movedOut'));
         setIsMoveOutOpen(false);
         setSelectedResident(null);
         setMoveOutNote('');
         fetchResidents();
       } else {
-        toast.error(result.error || 'Failed to move out resident');
+        toast.error(result.error || tErrors('generic'));
       }
     } catch (error) {
-      toast.error('Failed to move out resident');
+      toast.error(tErrors('generic'));
     } finally {
       setFormLoading(false);
     }
@@ -227,12 +232,12 @@ export default function ResidentsPage() {
   const columns: ColumnDef<Resident>[] = [
     {
       accessorKey: 'fullName',
-      header: 'Name',
+      header: t('fullName'),
       cell: ({ row }) => (
         <div>
           <p className="font-medium">{row.original.fullName}</p>
           {row.original.email && (
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
+            <p className="text-xs text-muted-foreground flex items-center gap-1" dir="ltr">
               <Mail className="h-3 w-3" />
               {row.original.email}
             </p>
@@ -242,16 +247,16 @@ export default function ResidentsPage() {
     },
     {
       accessorKey: 'apartmentId',
-      header: 'Apartment',
+      header: t('apartment'),
       cell: ({ row }) => (
-        <span>Apt. {row.original.apartmentId?.number || 'N/A'}</span>
+        <span>{tApartments('apt')} {row.original.apartmentId?.number || '-'}</span>
       ),
     },
     {
       accessorKey: 'phone',
-      header: 'Phone',
+      header: t('phone'),
       cell: ({ row }) => row.original.phone ? (
-        <span className="flex items-center gap-1">
+        <span className="flex items-center gap-1" dir="ltr">
           <Phone className="h-3 w-3 text-muted-foreground" />
           {row.original.phone}
         </span>
@@ -259,25 +264,25 @@ export default function ResidentsPage() {
     },
     {
       accessorKey: 'type',
-      header: 'Type',
+      header: t('type'),
       cell: ({ row }) => (
-        <Badge variant="outline" className="capitalize">
-          {row.original.type}
+        <Badge variant="outline">
+          {row.original.type === 'owner' ? t('owner') : t('tenant')}
         </Badge>
       ),
     },
     {
       accessorKey: 'isActive',
-      header: 'Status',
+      header: tCommon('status'),
       cell: ({ row }) => (
         <div className="flex flex-col gap-1">
           <Badge variant={row.original.isActive ? 'default' : 'secondary'}>
-            {row.original.isActive ? 'Active' : 'Moved Out'}
+            {row.original.isActive ? t('active') : t('movedOutStatus')}
           </Badge>
           {row.original.moveOutAt && (
             <span className="text-xs text-muted-foreground flex items-center gap-1">
               <Calendar className="h-3 w-3" />
-              {new Date(row.original.moveOutAt).toLocaleDateString()}
+              {new Date(row.original.moveOutAt).toLocaleDateString('he-IL')}
             </span>
           )}
         </div>
@@ -285,44 +290,48 @@ export default function ResidentsPage() {
     },
     {
       id: 'actions',
-      cell: ({ row }) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onClick={() => {
-                setSelectedResident(row.original);
-                setIsEditOpen(true);
-              }}
-            >
-              <Pencil className="mr-2 h-4 w-4" />
-              Edit
-            </DropdownMenuItem>
-            {row.original.isActive && (
+      cell: ({ row }) => {
+        const resident = row.original;
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" type="button">
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="sr-only">{tCommon('actions')}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuItem
                 onClick={() => {
-                  setSelectedResident(row.original);
-                  setIsMoveOutOpen(true);
+                  setSelectedResident(resident);
+                  setIsEditOpen(true);
                 }}
-                className="text-destructive focus:text-destructive"
               >
-                <UserMinus className="mr-2 h-4 w-4" />
-                Move Out
+                <Pencil className="ms-2 h-4 w-4" />
+                {t('editResident')}
               </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ),
+              {resident.isActive && (
+                <DropdownMenuItem
+                  onClick={() => {
+                    setSelectedResident(resident);
+                    setIsMoveOutOpen(true);
+                  }}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <UserMinus className="ms-2 h-4 w-4" />
+                  {t('moveOut')}
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
     },
   ];
 
   return (
     <div className="flex flex-col h-full">
-      <Header title="Residents" />
+      <Header title={t('title')} />
       
       <div className="flex-1 p-4 lg:p-6 space-y-4">
         {/* Actions */}
@@ -330,7 +339,7 @@ export default function ResidentsPage() {
           <div className="flex items-center gap-2 flex-1">
             <div className="max-w-sm flex-1">
               <Input
-                placeholder="Search by name, email, or phone..."
+                placeholder={t('searchPlaceholder')}
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
@@ -346,45 +355,45 @@ export default function ResidentsPage() {
               }}
             >
               <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Status" />
+                <SelectValue placeholder={tCommon('status')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Moved Out</SelectItem>
+                <SelectItem value="all">{tCommon('all')}</SelectItem>
+                <SelectItem value="active">{t('active')}</SelectItem>
+                <SelectItem value="inactive">{t('movedOutStatus')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
               <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Resident
+                <Plus className="ms-2 h-4 w-4" />
+                {t('addResident')}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <form onSubmit={handleCreate}>
                 <DialogHeader>
-                  <DialogTitle>Add Resident</DialogTitle>
+                  <DialogTitle>{t('addResident')}</DialogTitle>
                   <DialogDescription>
-                    Add a new resident to the building.
+                    {t('addResidentDesc')}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="fullName">Full Name *</Label>
-                    <Input id="fullName" name="fullName" required placeholder="John Doe" />
+                    <Label htmlFor="fullName">{t('fullName')} *</Label>
+                    <Input id="fullName" name="fullName" required placeholder="ישראל ישראלי" />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="apartmentId">Apartment *</Label>
+                    <Label htmlFor="apartmentId">{t('apartment')} *</Label>
                     <Select name="apartmentId" required>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select apartment" />
+                        <SelectValue placeholder={t('selectApartment')} />
                       </SelectTrigger>
                       <SelectContent>
                         {apartments.map((apt) => (
                           <SelectItem key={apt._id} value={apt._id}>
-                            Apt. {apt.number} {apt.floor && `(Floor ${apt.floor})`}
+                            {tApartments('apt')} {apt.number} {apt.floor && `(${tApartments('floor')} ${apt.floor})`}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -392,34 +401,34 @@ export default function ResidentsPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="email">Email</Label>
-                      <Input id="email" name="email" type="email" placeholder="john@example.com" />
+                      <Label htmlFor="email">{t('email')}</Label>
+                      <Input id="email" name="email" type="email" placeholder="israel@example.com" dir="ltr" />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="phone">Phone</Label>
-                      <Input id="phone" name="phone" placeholder="+1 234 567 890" />
+                      <Label htmlFor="phone">{t('phone')}</Label>
+                      <Input id="phone" name="phone" placeholder="050-1234567" dir="ltr" />
                     </div>
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="type">Type</Label>
+                    <Label htmlFor="type">{t('type')}</Label>
                     <Select name="type" defaultValue="owner">
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="owner">Owner</SelectItem>
-                        <SelectItem value="tenant">Tenant</SelectItem>
+                        <SelectItem value="owner">{t('owner')}</SelectItem>
+                        <SelectItem value="tenant">{t('tenant')}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>
-                    Cancel
+                    {tCommon('cancel')}
                   </Button>
                   <Button type="submit" disabled={formLoading}>
-                    {formLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Create
+                    {formLoading && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
+                    {tCommon('add')}
                   </Button>
                 </DialogFooter>
               </form>
@@ -441,14 +450,14 @@ export default function ResidentsPage() {
           <DialogContent>
             <form onSubmit={handleEdit}>
               <DialogHeader>
-                <DialogTitle>Edit Resident</DialogTitle>
+                <DialogTitle>{t('editResident')}</DialogTitle>
                 <DialogDescription>
-                  Update resident contact details and type.
+                  {t('editResidentDesc')}
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-fullName">Full Name *</Label>
+                  <Label htmlFor="edit-fullName">{t('fullName')} *</Label>
                   <Input
                     id="edit-fullName"
                     name="fullName"
@@ -457,57 +466,59 @@ export default function ResidentsPage() {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label>Apartment</Label>
+                  <Label>{t('apartment')}</Label>
                   <div className="flex items-center gap-2 h-10 px-3 rounded-md border bg-muted/50 text-sm">
                     <Home className="h-4 w-4 text-muted-foreground" />
-                    <span>Apt. {selectedResident?.apartmentId?.number}</span>
+                    <span>{tApartments('apt')} {selectedResident?.apartmentId?.number}</span>
                     {selectedResident?.apartmentId?.floor && (
-                      <span className="text-muted-foreground">(Floor {selectedResident.apartmentId.floor})</span>
+                      <span className="text-muted-foreground">({tApartments('floor')} {selectedResident.apartmentId.floor})</span>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    To change apartments, use the Move-out / Move-in flow
+                    {t('changeApartmentNote')}
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-email">Email</Label>
+                    <Label htmlFor="edit-email">{t('email')}</Label>
                     <Input
                       id="edit-email"
                       name="email"
                       type="email"
                       defaultValue={selectedResident?.email}
+                      dir="ltr"
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-phone">Phone</Label>
+                    <Label htmlFor="edit-phone">{t('phone')}</Label>
                     <Input
                       id="edit-phone"
                       name="phone"
                       defaultValue={selectedResident?.phone}
+                      dir="ltr"
                     />
                   </div>
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-type">Type</Label>
+                  <Label htmlFor="edit-type">{t('type')}</Label>
                   <Select name="type" defaultValue={selectedResident?.type}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="owner">Owner</SelectItem>
-                      <SelectItem value="tenant">Tenant</SelectItem>
+                      <SelectItem value="owner">{t('owner')}</SelectItem>
+                      <SelectItem value="tenant">{t('tenant')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>
-                  Cancel
+                  {tCommon('cancel')}
                 </Button>
                 <Button type="submit" disabled={formLoading}>
-                  {formLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Changes
+                  {formLoading && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
+                  {tCommon('save')}
                 </Button>
               </DialogFooter>
             </form>
@@ -524,35 +535,35 @@ export default function ResidentsPage() {
         }}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Move Out Resident</DialogTitle>
+              <DialogTitle>{t('moveOut')}</DialogTitle>
               <DialogDescription>
-                This will mark {selectedResident?.fullName} as moved out and disable their account access.
+                {t('moveOutConfirm')} {selectedResident?.fullName}
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="rounded-lg bg-muted p-4">
                 <div className="text-sm">
-                  <p><strong>Name:</strong> {selectedResident?.fullName}</p>
-                  <p><strong>Apartment:</strong> {selectedResident?.apartmentId?.number}</p>
-                  <p><strong>Type:</strong> {selectedResident?.type}</p>
+                  <p><strong>{t('fullName')}:</strong> {selectedResident?.fullName}</p>
+                  <p><strong>{t('apartment')}:</strong> {selectedResident?.apartmentId?.number}</p>
+                  <p><strong>{t('type')}:</strong> {selectedResident?.type === 'owner' ? t('owner') : t('tenant')}</p>
                 </div>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="moveOutNote">Reason / Note (optional)</Label>
+                <Label htmlFor="moveOutNote">{t('moveOutNote')} ({tCommon('optional')})</Label>
                 <Input
                   id="moveOutNote"
-                  placeholder="e.g., Relocated to another city"
+                  placeholder="לדוגמה: עבר לעיר אחרת"
                   value={moveOutNote}
                   onChange={(e) => setMoveOutNote(e.target.value)}
                 />
               </div>
               <p className="text-sm text-muted-foreground">
-                ⚠️ If this resident has a user account, it will be disabled and they will no longer be able to log in.
+                ⚠️ {t('moveOutWarning')}
               </p>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsMoveOutOpen(false)}>
-                Cancel
+                {tCommon('cancel')}
               </Button>
               <Button 
                 type="button" 
@@ -560,8 +571,8 @@ export default function ResidentsPage() {
                 onClick={handleMoveOut} 
                 disabled={formLoading}
               >
-                {formLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Confirm Move Out
+                {formLoading && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
+                {tCommon('confirm')}
               </Button>
             </DialogFooter>
           </DialogContent>
