@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
-import { BankInfo, BuildingSettings } from '@/lib/types';
+import { BankInfo, BuildingSettings, BuildingCounters } from '@/lib/types';
 
 export interface IBuilding extends Document {
   _id: mongoose.Types.ObjectId;
@@ -10,6 +10,7 @@ export interface IBuilding extends Document {
   timezone: string;
   bankInfo?: BankInfo;
   settings: BuildingSettings;
+  counters: BuildingCounters;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -31,6 +32,10 @@ const buildingSchema = new Schema<IBuilding>(
       currency: { type: String, default: 'ILS' },
       dueDay: { type: Number, default: 10, min: 1, max: 28 },
       monthlyDueAmount: Number,
+      invoicePrefix: { type: String, default: 'INV' },
+    },
+    counters: {
+      invoiceNextNumber: { type: Number, default: 1 },
     },
   },
   {

@@ -44,7 +44,10 @@ export type AuditAction =
   | 'delete'
   | 'login'
   | 'generate_charges'
-  | 'import_data';
+  | 'import_data'
+  | 'invoice_view'
+  | 'invoice_download'
+  | 'invoice_issued';
 
 // Audit Entity Types
 export type AuditEntityType = 
@@ -63,6 +66,12 @@ export interface BuildingSettings {
   currency: string;
   dueDay: number;
   monthlyDueAmount?: number;
+  invoicePrefix?: string;
+}
+
+// Building Counters Interface
+export interface BuildingCounters {
+  invoiceNextNumber: number;
 }
 
 // Bank Info Interface

@@ -12,6 +12,8 @@ export interface ICharge extends Document {
   period?: string | null; // YYYY-MM for monthly charges
   dueDate: Date;
   status: ChargeStatus;
+  invoiceNumber?: string; // Sequential invoice number (assigned on first view)
+  invoicedAt?: Date; // When invoice was first issued
   createdBy: Types.ObjectId;
   createdAt: Date;
 }
@@ -31,10 +33,12 @@ const chargeSchema = new Schema<ICharge>(
     period: { type: String, default: null }, // YYYY-MM format
     dueDate: { type: Date, required: true },
     status: { type: String, enum: ['open', 'voided'], default: 'open' },
+    invoiceNumber: { type: String, sparse: true }, // Assigned on first invoice view
+    invoicedAt: { type: Date }, // When invoice was first issued
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   },
   {
-    timestamps: { createdAt: true, updatedAt: false }, // Immutable - no updates
+    timestamps: { createdAt: true, updatedAt: false }, // Immutable - no updates (except invoice fields)
   }
 );
 
@@ -52,6 +56,14 @@ chargeSchema.index(
       period: { $ne: null },
       status: 'open'
     } 
+  }
+);
+// Unique sparse index for invoice numbers within a building
+chargeSchema.index(
+  { buildingId: 1, invoiceNumber: 1 },
+  { 
+    unique: true, 
+    sparse: true // Only index documents where invoiceNumber exists
   }
 );
 
