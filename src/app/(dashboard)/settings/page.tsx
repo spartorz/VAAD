@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
+import { useTranslations } from 'next-intl';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,23 +42,27 @@ interface BuildingSettings {
 }
 
 const CURRENCIES = [
-  { code: 'ILS', name: 'Israeli Shekel (₪)', symbol: '₪' },
-  { code: 'USD', name: 'US Dollar ($)', symbol: '$' },
-  { code: 'EUR', name: 'Euro (€)', symbol: '€' },
-  { code: 'GBP', name: 'British Pound (£)', symbol: '£' },
+  { code: 'ILS', name: 'שקל ישראלי (₪)', symbol: '₪' },
+  { code: 'USD', name: 'דולר אמריקאי ($)', symbol: '$' },
+  { code: 'EUR', name: 'אירו (€)', symbol: '€' },
+  { code: 'GBP', name: 'לירה שטרלינג (£)', symbol: '£' },
 ];
 
 const TIMEZONES = [
-  { value: 'Asia/Jerusalem', label: 'Israel (GMT+2/+3)' },
+  { value: 'Asia/Jerusalem', label: 'ישראל (GMT+2/+3)' },
   { value: 'UTC', label: 'UTC' },
-  { value: 'America/New_York', label: 'Eastern Time (US)' },
-  { value: 'America/Los_Angeles', label: 'Pacific Time (US)' },
-  { value: 'Europe/London', label: 'London (GMT)' },
-  { value: 'Europe/Paris', label: 'Central European' },
+  { value: 'America/New_York', label: 'ארה"ב - מזרחי' },
+  { value: 'America/Los_Angeles', label: 'ארה"ב - מערבי' },
+  { value: 'Europe/London', label: 'לונדון (GMT)' },
+  { value: 'Europe/Paris', label: 'מרכז אירופה' },
 ];
 
 export default function SettingsPage() {
   const { data: session } = useSession();
+  const t = useTranslations('settings');
+  const tCommon = useTranslations('common');
+  const tSuccess = useTranslations('success');
+  const tErrors = useTranslations('errors');
   const [building, setBuilding] = useState<BuildingSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -124,10 +129,10 @@ export default function SettingsPage() {
         setRoutingNumber(data.bankInfo?.routingNumber || '');
         setBankNotes(data.bankInfo?.notes || '');
       } else {
-        toast.error(result.error || 'Failed to fetch building settings');
+        toast.error(result.error || tErrors('loadFailed'));
       }
     } catch (error) {
-      toast.error('Failed to fetch building settings');
+      toast.error(tErrors('loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -159,14 +164,14 @@ export default function SettingsPage() {
       const result = await response.json();
 
       if (result.success) {
-        toast.success('Building information saved successfully');
+        toast.success(tSuccess('saved'));
         setBuilding(result.data);
         setLastSaved(new Date());
       } else {
-        toast.error(result.error || 'Failed to save settings');
+        toast.error(result.error || tErrors('saveFailed'));
       }
     } catch (error) {
-      toast.error('Failed to save settings');
+      toast.error(tErrors('saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -194,14 +199,14 @@ export default function SettingsPage() {
       const result = await response.json();
 
       if (result.success) {
-        toast.success('Billing settings saved successfully');
+        toast.success(tSuccess('saved'));
         setBuilding(result.data);
         setLastSaved(new Date());
       } else {
-        toast.error(result.error || 'Failed to save settings');
+        toast.error(result.error || tErrors('saveFailed'));
       }
     } catch (error) {
-      toast.error('Failed to save settings');
+      toast.error(tErrors('saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -230,14 +235,14 @@ export default function SettingsPage() {
       const result = await response.json();
 
       if (result.success) {
-        toast.success('Bank information saved successfully');
+        toast.success(tSuccess('saved'));
         setBuilding(result.data);
         setLastSaved(new Date());
       } else {
-        toast.error(result.error || 'Failed to save settings');
+        toast.error(result.error || tErrors('saveFailed'));
       }
     } catch (error) {
-      toast.error('Failed to save settings');
+      toast.error(tErrors('saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -246,7 +251,7 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <div className="flex flex-col h-full">
-        <Header title="Building Settings" />
+        <Header title={t('title')} />
         <div className="flex-1 flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
@@ -258,7 +263,7 @@ export default function SettingsPage() {
   if (userRole === 'RESIDENT') {
     return (
       <div className="flex flex-col h-full">
-        <Header title="Building Information" />
+        <Header title={t('generalInfo')} />
         <div className="flex-1 p-4 lg:p-6">
           <Card>
             <CardHeader>
@@ -266,28 +271,28 @@ export default function SettingsPage() {
                 <Building2 className="h-5 w-5" />
                 {building?.name}
               </CardTitle>
-              <CardDescription>Your building information</CardDescription>
+              <CardDescription>{t('buildingSettings')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-muted-foreground">Address</Label>
+                  <Label className="text-muted-foreground">{t('address')}</Label>
                   <p className="font-medium">{building?.address}</p>
                 </div>
                 <div>
-                  <Label className="text-muted-foreground">City</Label>
+                  <Label className="text-muted-foreground">{t('city')}</Label>
                   <p className="font-medium">{building?.city}, {building?.country}</p>
                 </div>
               </div>
               <Separator />
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-muted-foreground">Currency</Label>
+                  <Label className="text-muted-foreground">{t('currency')}</Label>
                   <p className="font-medium">{building?.settings?.currency || 'ILS'}</p>
                 </div>
                 <div>
-                  <Label className="text-muted-foreground">Payment Due Day</Label>
-                  <p className="font-medium">{building?.settings?.dueDay || 10} of each month</p>
+                  <Label className="text-muted-foreground">{t('dueDay')}</Label>
+                  <p className="font-medium">{building?.settings?.dueDay || 10} בחודש</p>
                 </div>
               </div>
             </CardContent>
@@ -299,14 +304,14 @@ export default function SettingsPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <Header title="Building Settings" />
+      <Header title={t('title')} />
       
       <div className="flex-1 p-4 lg:p-6 space-y-6">
         {/* Last saved indicator */}
         {lastSaved && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <CheckCircle2 className="h-4 w-4 text-green-500" />
-            Last saved: {lastSaved.toLocaleTimeString()}
+            {t('lastSaved', { time: lastSaved.toLocaleTimeString('he-IL') })}
           </div>
         )}
 
@@ -314,18 +319,18 @@ export default function SettingsPage() {
           <TabsList>
             <TabsTrigger value="general" className="flex items-center gap-2">
               <Building2 className="h-4 w-4" />
-              General
-              {hasGeneralChanges && <span className="ml-1 h-2 w-2 rounded-full bg-amber-500" />}
+              {t('generalInfo')}
+              {hasGeneralChanges && <span className="ms-1 h-2 w-2 rounded-full bg-amber-500" />}
             </TabsTrigger>
             <TabsTrigger value="billing" className="flex items-center gap-2">
               <CreditCard className="h-4 w-4" />
-              Billing
-              {hasBillingChanges && <span className="ml-1 h-2 w-2 rounded-full bg-amber-500" />}
+              {t('billingSettings')}
+              {hasBillingChanges && <span className="ms-1 h-2 w-2 rounded-full bg-amber-500" />}
             </TabsTrigger>
             <TabsTrigger value="bank" className="flex items-center gap-2">
               <Landmark className="h-4 w-4" />
-              Bank Info
-              {hasBankChanges && <span className="ml-1 h-2 w-2 rounded-full bg-amber-500" />}
+              {t('bankInfo')}
+              {hasBankChanges && <span className="ms-1 h-2 w-2 rounded-full bg-amber-500" />}
             </TabsTrigger>
           </TabsList>
 
@@ -333,64 +338,64 @@ export default function SettingsPage() {
           <TabsContent value="general">
             <Card>
               <CardHeader>
-                <CardTitle>Building Information</CardTitle>
+                <CardTitle>{t('generalInfo')}</CardTitle>
                 <CardDescription>
-                  Basic details about your building
-                  {!canEdit && <span className="ml-2 text-amber-600">(Read-only for your role)</span>}
+                  {t('buildingSettings')}
+                  {!canEdit && <span className="ms-2 text-amber-600">({t('readOnly')})</span>}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="name">Building Name</Label>
+                    <Label htmlFor="name">{t('buildingName')}</Label>
                     <Input
                       id="name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder="e.g., Sunset Towers"
+                      placeholder="לדוגמה: מגדלי השמש"
                       disabled={!canEdit}
                     />
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="address">Address</Label>
+                    <Label htmlFor="address">{t('address')}</Label>
                     <Input
                       id="address"
                       value={address}
                       onChange={(e) => setAddress(e.target.value)}
-                      placeholder="123 Main Street"
+                      placeholder="רחוב הראשי 123"
                       disabled={!canEdit}
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="city">City</Label>
+                      <Label htmlFor="city">{t('city')}</Label>
                       <Input
                         id="city"
                         value={city}
                         onChange={(e) => setCity(e.target.value)}
-                        placeholder="Tel Aviv"
+                        placeholder="תל אביב"
                         disabled={!canEdit}
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="country">Country</Label>
+                      <Label htmlFor="country">{t('country')}</Label>
                       <Input
                         id="country"
                         value={country}
                         onChange={(e) => setCountry(e.target.value)}
-                        placeholder="Israel"
+                        placeholder="ישראל"
                         disabled={!canEdit}
                       />
                     </div>
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="timezone">Timezone</Label>
+                    <Label htmlFor="timezone">{t('timezone')}</Label>
                     <Select value={timezone} onValueChange={setTimezone} disabled={!canEdit}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select timezone" />
+                        <SelectValue placeholder={tCommon('select')} />
                       </SelectTrigger>
                       <SelectContent>
                         {TIMEZONES.map((tz) => (
@@ -408,14 +413,14 @@ export default function SettingsPage() {
                   <Button 
                     onClick={handleSaveGeneral} 
                     disabled={saving || !hasGeneralChanges}
-                    className="ml-auto"
+                    className="ms-auto"
                   >
                     {saving ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="ms-2 h-4 w-4 animate-spin" />
                     ) : (
-                      <Save className="mr-2 h-4 w-4" />
+                      <Save className="ms-2 h-4 w-4" />
                     )}
-                    {hasGeneralChanges ? 'Save Changes' : 'No Changes'}
+                    {hasGeneralChanges ? t('saveChanges') : tCommon('noChanges')}
                   </Button>
                 </CardFooter>
               )}
@@ -426,18 +431,18 @@ export default function SettingsPage() {
           <TabsContent value="billing">
             <Card>
               <CardHeader>
-                <CardTitle>Billing Settings</CardTitle>
+                <CardTitle>{t('billingSettings')}</CardTitle>
                 <CardDescription>
-                  Configure payment and billing preferences
+                  הגדרות תשלום וחיוב
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="currency">Currency</Label>
+                    <Label htmlFor="currency">{t('currency')}</Label>
                     <Select value={currency} onValueChange={setCurrency} disabled={!canEditFinancial}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select currency" />
+                        <SelectValue placeholder={tCommon('select')} />
                       </SelectTrigger>
                       <SelectContent>
                         {CURRENCIES.map((c) => (
@@ -451,7 +456,7 @@ export default function SettingsPage() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="dueDay">Due Day of Month</Label>
+                      <Label htmlFor="dueDay">{t('dueDay')}</Label>
                       <Select 
                         value={dueDay.toString()} 
                         onValueChange={(v) => setDueDay(parseInt(v))}
@@ -469,27 +474,28 @@ export default function SettingsPage() {
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground">
-                        Payments are due on this day each month
+                        התשלום צריך להתבצע עד יום זה בכל חודש
                       </p>
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="monthlyDueAmount">Default Monthly Amount</Label>
+                      <Label htmlFor="monthlyDueAmount">{t('monthlyAmount')}</Label>
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                        <span className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                           {CURRENCIES.find(c => c.code === currency)?.symbol || '₪'}
                         </span>
                         <Input
                           id="monthlyDueAmount"
                           type="number"
-                          className="pl-8"
+                          className="pe-10"
                           value={monthlyDueAmount}
                           onChange={(e) => setMonthlyDueAmount(e.target.value ? parseFloat(e.target.value) : '')}
                           placeholder="0.00"
                           disabled={!canEditFinancial}
+                          dir="ltr"
                         />
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Used when generating monthly charges
+                        משמש ביצירת חיובים חודשיים
                       </p>
                     </div>
                   </div>
@@ -500,14 +506,14 @@ export default function SettingsPage() {
                   <Button 
                     onClick={handleSaveBilling} 
                     disabled={saving || !hasBillingChanges}
-                    className="ml-auto"
+                    className="ms-auto"
                   >
                     {saving ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="ms-2 h-4 w-4 animate-spin" />
                     ) : (
-                      <Save className="mr-2 h-4 w-4" />
+                      <Save className="ms-2 h-4 w-4" />
                     )}
-                    {hasBillingChanges ? 'Save Changes' : 'No Changes'}
+                    {hasBillingChanges ? t('saveChanges') : tCommon('noChanges')}
                   </Button>
                 </CardFooter>
               )}
@@ -518,59 +524,61 @@ export default function SettingsPage() {
           <TabsContent value="bank">
             <Card>
               <CardHeader>
-                <CardTitle>Bank Account Information</CardTitle>
+                <CardTitle>{t('bankInfo')}</CardTitle>
                 <CardDescription>
-                  Building's bank account for receiving payments
+                  פרטי חשבון הבנק של הבניין לקבלת תשלומים
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="bankName">Bank Name</Label>
+                    <Label htmlFor="bankName">{t('bankName')}</Label>
                     <Input
                       id="bankName"
                       value={bankName}
                       onChange={(e) => setBankName(e.target.value)}
-                      placeholder="e.g., Bank Hapoalim"
+                      placeholder="לדוגמה: בנק הפועלים"
                       disabled={!canEditFinancial}
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="accountNumber">Account Number</Label>
+                      <Label htmlFor="accountNumber">{t('accountNumber')}</Label>
                       <Input
                         id="accountNumber"
                         value={accountNumber}
                         onChange={(e) => setAccountNumber(e.target.value)}
                         placeholder="123456789"
                         disabled={!canEditFinancial}
+                        dir="ltr"
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="routingNumber">Branch / Routing Number</Label>
+                      <Label htmlFor="routingNumber">{t('branchNumber')}</Label>
                       <Input
                         id="routingNumber"
                         value={routingNumber}
                         onChange={(e) => setRoutingNumber(e.target.value)}
                         placeholder="123"
                         disabled={!canEditFinancial}
+                        dir="ltr"
                       />
                     </div>
                   </div>
 
                   <div className="grid gap-2">
-                    <Label htmlFor="bankNotes">Payment Instructions / Notes</Label>
+                    <Label htmlFor="bankNotes">{t('paymentNotes')}</Label>
                     <Textarea
                       id="bankNotes"
                       value={bankNotes}
                       onChange={(e) => setBankNotes(e.target.value)}
-                      placeholder="e.g., Please include your apartment number in the transfer reference"
+                      placeholder="לדוגמה: נא לציין את מספר הדירה בהעברה"
                       rows={3}
                       disabled={!canEditFinancial}
                     />
                     <p className="text-xs text-muted-foreground">
-                      These notes will be shown to residents when viewing payment instructions
+                      הערות אלו יוצגו לדיירים בעת צפייה בהוראות התשלום
                     </p>
                   </div>
                 </div>
@@ -580,14 +588,14 @@ export default function SettingsPage() {
                   <Button 
                     onClick={handleSaveBank} 
                     disabled={saving || !hasBankChanges}
-                    className="ml-auto"
+                    className="ms-auto"
                   >
                     {saving ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="ms-2 h-4 w-4 animate-spin" />
                     ) : (
-                      <Save className="mr-2 h-4 w-4" />
+                      <Save className="ms-2 h-4 w-4" />
                     )}
-                    {hasBankChanges ? 'Save Changes' : 'No Changes'}
+                    {hasBankChanges ? t('saveChanges') : tCommon('noChanges')}
                   </Button>
                 </CardFooter>
               )}

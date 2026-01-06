@@ -42,7 +42,9 @@
     "error": "שגיאה",
     "success": "הצלחה",
     "warning": "אזהרה",
-    "info": "מידע"
+    "info": "מידע",
+    "noChanges": "אין שינויים",
+    "select": "בחר"
   },
   "nav": {
     "dashboard": "לוח בקרה",
