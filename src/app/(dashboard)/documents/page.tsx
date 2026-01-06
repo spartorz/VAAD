@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
+import { useTranslations } from 'next-intl';
 import { Header } from '@/components/layout/header';
 import { DataTable } from '@/components/data-table';
 import { Button } from '@/components/ui/button';
@@ -66,6 +67,9 @@ const visibilityIcons: Record<string, React.ReactNode> = {
 
 export default function DocumentsPage() {
   const { data: session } = useSession();
+  const t = useTranslations('documents');
+  const tCommon = useTranslations('common');
+  const tErrors = useTranslations('errors');
   const isManager = ['ADMIN', 'BOARD', 'MANAGEMENT'].includes(session?.user?.role || '');
   
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -94,11 +98,11 @@ export default function DocumentsPage() {
         setPagination(result.data.pagination);
       }
     } catch (error) {
-      toast.error('Failed to fetch documents');
+      toast.error(tErrors('loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [pagination.page, pagination.limit, search]);
+  }, [pagination.page, pagination.limit, search, tErrors]);
 
   useEffect(() => {
     fetchDocuments();
@@ -121,12 +125,12 @@ export default function DocumentsPage() {
       const result = await response.json();
       if (result.success) {
         setUploadedFile(result.data);
-        toast.success('File uploaded');
+        toast.success(t('fileUploaded'));
       } else {
         toast.error(result.error);
       }
     } catch (error) {
-      toast.error('Failed to upload file');
+      toast.error(tErrors('uploadFailed'));
     } finally {
       setUploadingFile(false);
     }
@@ -135,7 +139,7 @@ export default function DocumentsPage() {
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!uploadedFile) {
-      toast.error('Please upload a file first');
+      toast.error(t('uploadFileFirst'));
       return;
     }
     setFormLoading(true);
@@ -157,7 +161,7 @@ export default function DocumentsPage() {
 
       const result = await response.json();
       if (result.success) {
-        toast.success('Document created');
+        toast.success(t('documentCreated'));
         setIsUploadOpen(false);
         setUploadedFile(null);
         fetchDocuments();
@@ -165,26 +169,26 @@ export default function DocumentsPage() {
         toast.error(result.error);
       }
     } catch (error) {
-      toast.error('Failed to create document');
+      toast.error(tErrors('createFailed'));
     } finally {
       setFormLoading(false);
     }
   };
 
   const handleDelete = async (docId: string) => {
-    if (!confirm('Are you sure you want to delete this document?')) return;
+    if (!confirm(t('confirmDelete'))) return;
 
     try {
       const response = await fetch(`/api/documents/${docId}`, { method: 'DELETE' });
       const result = await response.json();
       if (result.success) {
-        toast.success('Document deleted');
+        toast.success(t('documentDeleted'));
         fetchDocuments();
       } else {
         toast.error(result.error);
       }
     } catch (error) {
-      toast.error('Failed to delete document');
+      toast.error(tErrors('deleteFailed'));
     }
   };
 
@@ -194,51 +198,71 @@ export default function DocumentsPage() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  const getCategoryLabel = (category: string) => {
+    const labels: Record<string, string> = {
+      insurance: t('insurance'),
+      protocol: t('protocol'),
+      receipt: t('receipt'),
+      contract: t('contract'),
+      other: t('other'),
+    };
+    return labels[category] || category;
+  };
+
+  const getVisibilityLabel = (visibility: string) => {
+    const labels: Record<string, string> = {
+      public: t('public'),
+      residents_only: t('residentsOnly'),
+      board_only: t('boardOnly'),
+    };
+    return labels[visibility] || visibility;
+  };
+
   const columns: ColumnDef<Document>[] = [
     {
       accessorKey: 'title',
-      header: 'Title',
+      header: t('documentTitle'),
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <FileText className="h-4 w-4 text-muted-foreground" />
           <div>
             <p className="font-medium">{row.original.title}</p>
-            <p className="text-xs text-muted-foreground">{row.original.file.name}</p>
+            <p className="text-xs text-muted-foreground" dir="ltr">{row.original.file.name}</p>
           </div>
         </div>
       ),
     },
     {
       accessorKey: 'category',
-      header: 'Category',
+      header: t('category'),
       cell: ({ row }) => (
         <Badge className={categoryColors[row.original.category] || categoryColors.other}>
-          {row.original.category}
+          {getCategoryLabel(row.original.category)}
         </Badge>
       ),
     },
     {
       accessorKey: 'visibility',
-      header: 'Visibility',
+      header: t('visibility'),
       cell: ({ row }) => (
         <Badge variant="outline" className="flex items-center gap-1 w-fit">
           {visibilityIcons[row.original.visibility]}
-          {row.original.visibility.replace('_', ' ')}
+          {getVisibilityLabel(row.original.visibility)}
         </Badge>
       ),
     },
     {
       accessorKey: 'file.size',
-      header: 'Size',
+      header: t('fileSize'),
       cell: ({ row }) => formatFileSize(row.original.file.size),
     },
     {
       accessorKey: 'createdAt',
-      header: 'Uploaded',
+      header: t('uploadedAt'),
       cell: ({ row }) => (
         <div>
           <p className="text-sm">{formatDate(row.original.createdAt)}</p>
-          <p className="text-xs text-muted-foreground">by {row.original.createdBy?.name}</p>
+          <p className="text-xs text-muted-foreground">{t('by')} {row.original.createdBy?.name}</p>
         </div>
       ),
     },
@@ -252,12 +276,12 @@ export default function DocumentsPage() {
           <DropdownMenuContent align="end">
             <DropdownMenuItem asChild>
               <a href={row.original.file.url} target="_blank" rel="noopener noreferrer">
-                <Download className="mr-2 h-4 w-4" />Download
+                <Download className="ms-2 h-4 w-4" />{tCommon('download')}
               </a>
             </DropdownMenuItem>
             {isManager && (
               <DropdownMenuItem onClick={() => handleDelete(row.original._id)} className="text-red-600">
-                <Trash2 className="mr-2 h-4 w-4" />Delete
+                <Trash2 className="ms-2 h-4 w-4" />{tCommon('delete')}
               </DropdownMenuItem>
             )}
           </DropdownMenuContent>
@@ -268,12 +292,12 @@ export default function DocumentsPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <Header title="Documents" />
+      <Header title={t('title')} />
       
       <div className="flex-1 p-4 lg:p-6 space-y-4">
         <div className="flex items-center justify-between gap-4">
           <Input
-            placeholder="Search documents..."
+            placeholder={t('searchPlaceholder')}
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPagination((p) => ({ ...p, page: 1 })); }}
             className="max-w-xs"
@@ -284,27 +308,27 @@ export default function DocumentsPage() {
               if (!open) setUploadedFile(null);
             }}>
               <DialogTrigger asChild>
-                <Button><Plus className="mr-2 h-4 w-4" />Upload Document</Button>
+                <Button><Plus className="ms-2 h-4 w-4" />{t('uploadDocument')}</Button>
               </DialogTrigger>
               <DialogContent>
                 <form onSubmit={handleCreate}>
                   <DialogHeader>
-                    <DialogTitle>Upload Document</DialogTitle>
-                    <DialogDescription>Upload a document to the building.</DialogDescription>
+                    <DialogTitle>{t('uploadDocument')}</DialogTitle>
+                    <DialogDescription>{t('uploadDocumentDesc')}</DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     {/* File Upload */}
                     <div className="grid gap-2">
-                      <Label>File *</Label>
+                      <Label>{t('file')} *</Label>
                       {uploadedFile ? (
                         <div className="p-3 rounded-lg bg-muted flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <FileText className="h-4 w-4" />
-                            <span className="text-sm">{uploadedFile.name}</span>
+                            <span className="text-sm" dir="ltr">{uploadedFile.name}</span>
                             <span className="text-xs text-muted-foreground">({formatFileSize(uploadedFile.size)})</span>
                           </div>
                           <Button type="button" variant="ghost" size="sm" onClick={() => setUploadedFile(null)}>
-                            Remove
+                            {t('remove')}
                           </Button>
                         </div>
                       ) : (
@@ -323,7 +347,7 @@ export default function DocumentsPage() {
                               <Upload className="h-6 w-6 text-muted-foreground" />
                             )}
                             <span className="text-sm text-muted-foreground">
-                              {uploadingFile ? 'Uploading...' : 'Click to upload'}
+                              {uploadingFile ? t('uploading') : t('clickToUpload')}
                             </span>
                           </label>
                         </div>
@@ -331,41 +355,41 @@ export default function DocumentsPage() {
                     </div>
 
                     <div className="grid gap-2">
-                      <Label>Title *</Label>
-                      <Input name="title" required placeholder="Document title" />
+                      <Label>{t('documentTitle')} *</Label>
+                      <Input name="title" required placeholder={t('documentTitlePlaceholder')} />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="grid gap-2">
-                        <Label>Category *</Label>
+                        <Label>{t('category')} *</Label>
                         <Select name="category" required>
-                          <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                          <SelectTrigger><SelectValue placeholder={tCommon('select')} /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="insurance">Insurance</SelectItem>
-                            <SelectItem value="protocol">Protocol</SelectItem>
-                            <SelectItem value="receipt">Receipt</SelectItem>
-                            <SelectItem value="contract">Contract</SelectItem>
-                            <SelectItem value="other">Other</SelectItem>
+                            <SelectItem value="insurance">{t('insurance')}</SelectItem>
+                            <SelectItem value="protocol">{t('protocol')}</SelectItem>
+                            <SelectItem value="receipt">{t('receipt')}</SelectItem>
+                            <SelectItem value="contract">{t('contract')}</SelectItem>
+                            <SelectItem value="other">{t('other')}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="grid gap-2">
-                        <Label>Visibility *</Label>
+                        <Label>{t('visibility')} *</Label>
                         <Select name="visibility" required defaultValue="board_only">
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="public">Public</SelectItem>
-                            <SelectItem value="residents_only">Residents Only</SelectItem>
-                            <SelectItem value="board_only">Board Only</SelectItem>
+                            <SelectItem value="public">{t('public')}</SelectItem>
+                            <SelectItem value="residents_only">{t('residentsOnly')}</SelectItem>
+                            <SelectItem value="board_only">{t('boardOnly')}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => setIsUploadOpen(false)}>Cancel</Button>
+                    <Button type="button" variant="outline" onClick={() => setIsUploadOpen(false)}>{tCommon('cancel')}</Button>
                     <Button type="submit" disabled={formLoading || !uploadedFile}>
-                      {formLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Upload
+                      {formLoading && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}{tCommon('upload')}
                     </Button>
                   </DialogFooter>
                 </form>
