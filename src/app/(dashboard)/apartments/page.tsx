@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
 import { Header } from '@/components/layout/header';
 import { DataTable } from '@/components/data-table';
 import { Button } from '@/components/ui/button';
@@ -69,6 +70,10 @@ interface PaginationState {
 
 export default function ApartmentsPage() {
   const searchParams = useSearchParams();
+  const t = useTranslations('apartments');
+  const tResidents = useTranslations('residents');
+  const tCommon = useTranslations('common');
+  const tErrors = useTranslations('errors');
   const [apartments, setApartments] = useState<Apartment[]>([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState<PaginationState>({
@@ -110,11 +115,11 @@ export default function ApartmentsPage() {
         setPagination(result.data.pagination);
       }
     } catch (error) {
-      toast.error('Failed to fetch apartments');
+      toast.error(tErrors('generic'));
     } finally {
       setLoading(false);
     }
-  }, [pagination.page, pagination.limit, search]);
+  }, [pagination.page, pagination.limit, search, tErrors]);
 
   useEffect(() => {
     fetchApartments();
@@ -142,14 +147,14 @@ export default function ApartmentsPage() {
       const result = await response.json();
 
       if (result.success) {
-        toast.success('Apartment created successfully');
+        toast.success(t('apartmentCreated'));
         setIsCreateOpen(false);
         fetchApartments();
       } else {
-        toast.error(result.error || 'Failed to create apartment');
+        toast.error(result.error || tErrors('createFailed'));
       }
     } catch (error) {
-      toast.error('Failed to create apartment');
+      toast.error(tErrors('createFailed'));
     } finally {
       setFormLoading(false);
     }
@@ -178,15 +183,15 @@ export default function ApartmentsPage() {
       const result = await response.json();
 
       if (result.success) {
-        toast.success('Apartment updated successfully');
+        toast.success(t('apartmentUpdated'));
         setIsEditOpen(false);
         setSelectedApartment(null);
         fetchApartments();
       } else {
-        toast.error(result.error || 'Failed to update apartment');
+        toast.error(result.error || tErrors('updateFailed'));
       }
     } catch (error) {
-      toast.error('Failed to update apartment');
+      toast.error(tErrors('updateFailed'));
     } finally {
       setFormLoading(false);
     }
@@ -202,10 +207,10 @@ export default function ApartmentsPage() {
         setActiveResidents(result.data.activeResidents || []);
         setResidentHistory(result.data.residentHistory || []);
       } else {
-        toast.error(result.error || 'Failed to fetch residents');
+        toast.error(result.error || tErrors('loadFailed'));
       }
     } catch (error) {
-      toast.error('Failed to fetch residents');
+      toast.error(tErrors('loadFailed'));
     } finally {
       setResidentsLoading(false);
     }
@@ -234,14 +239,14 @@ export default function ApartmentsPage() {
       const result = await response.json();
 
       if (result.success) {
-        toast.success('Resident moved in successfully');
+        toast.success(tResidents('movedIn'));
         setIsMoveInOpen(false);
         fetchApartmentResidents(selectedApartment._id);
       } else {
-        toast.error(result.error || 'Failed to move in resident');
+        toast.error(result.error || tErrors('generic'));
       }
     } catch (error) {
-      toast.error('Failed to move in resident');
+      toast.error(tErrors('generic'));
     } finally {
       setFormLoading(false);
     }
@@ -261,7 +266,7 @@ export default function ApartmentsPage() {
       const result = await response.json();
 
       if (result.success) {
-        toast.success('Resident moved out successfully');
+        toast.success(tResidents('movedOut'));
         setIsMoveOutOpen(false);
         setSelectedResident(null);
         setMoveOutNote('');
@@ -269,10 +274,10 @@ export default function ApartmentsPage() {
           fetchApartmentResidents(selectedApartment._id);
         }
       } else {
-        toast.error(result.error || 'Failed to move out resident');
+        toast.error(result.error || tErrors('generic'));
       }
     } catch (error) {
-      toast.error('Failed to move out resident');
+      toast.error(tErrors('generic'));
     } finally {
       setFormLoading(false);
     }
@@ -298,15 +303,15 @@ export default function ApartmentsPage() {
       const result = await response.json();
 
       if (result.success) {
-        toast.success('Apartment deactivated successfully');
+        toast.success(t('apartmentDeactivated'));
         setIsDeactivateOpen(false);
         setSelectedApartment(null);
         fetchApartments();
       } else {
-        toast.error(result.error || 'Failed to deactivate apartment');
+        toast.error(result.error || tErrors('generic'));
       }
     } catch (error) {
-      toast.error('Failed to deactivate apartment');
+      toast.error(tErrors('generic'));
     } finally {
       setFormLoading(false);
     }
@@ -315,84 +320,88 @@ export default function ApartmentsPage() {
   const columns: ColumnDef<Apartment>[] = [
     {
       accessorKey: 'number',
-      header: 'Apartment',
+      header: t('apartmentNumber'),
       cell: ({ row }) => (
-        <span className="font-medium">Apt. {row.original.number}</span>
+        <span className="font-medium">{t('apt')} {row.original.number}</span>
       ),
     },
     {
       accessorKey: 'floor',
-      header: 'Floor',
+      header: t('floor'),
       cell: ({ row }) => row.original.floor || '-',
     },
     {
       accessorKey: 'size',
-      header: 'Size (sqft)',
+      header: t('size'),
       cell: ({ row }) => row.original.size || '-',
     },
     {
       accessorKey: 'status',
-      header: 'Status',
+      header: tCommon('status'),
       cell: ({ row }) => (
         <Badge variant={row.original.status === 'active' ? 'default' : 'secondary'}>
-          {row.original.status}
+          {row.original.status === 'active' ? t('active') : t('inactive')}
         </Badge>
       ),
     },
     {
       id: 'actions',
-      cell: ({ row }) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => openResidentsPanel(row.original)}>
-              <Users className="mr-2 h-4 w-4" />
-              View Residents
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => {
-                setSelectedApartment(row.original);
-                setIsEditOpen(true);
-              }}
-            >
-              <Pencil className="mr-2 h-4 w-4" />
-              Edit Apartment
-            </DropdownMenuItem>
-            {row.original.status === 'active' && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => {
-                    setSelectedApartment(row.original);
-                    setIsDeactivateOpen(true);
-                  }}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Ban className="mr-2 h-4 w-4" />
-                  Deactivate
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ),
+      cell: ({ row }) => {
+        const apartment = row.original;
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" type="button">
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="sr-only">{tCommon('actions')}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onClick={() => openResidentsPanel(apartment)}>
+                <Users className="ms-2 h-4 w-4" />
+                {t('viewResidents')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  setSelectedApartment(apartment);
+                  setIsEditOpen(true);
+                }}
+              >
+                <Pencil className="ms-2 h-4 w-4" />
+                {t('editApartment')}
+              </DropdownMenuItem>
+              {apartment.status === 'active' && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setSelectedApartment(apartment);
+                      setIsDeactivateOpen(true);
+                    }}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Ban className="ms-2 h-4 w-4" />
+                    {tCommon('deactivate')}
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
     },
   ];
 
   return (
     <div className="flex flex-col h-full">
-      <Header title="Apartments" />
+      <Header title={t('title')} />
       
       <div className="flex-1 p-4 lg:p-6 space-y-4">
         {/* Actions */}
         <div className="flex items-center justify-between gap-4">
           <div className="flex-1 max-w-sm">
             <Input
-              placeholder="Search by apartment number..."
+              placeholder={t('searchPlaceholder')}
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -402,59 +411,59 @@ export default function ApartmentsPage() {
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setIsImportOpen(true)}>
-              <Upload className="mr-2 h-4 w-4" />
-              Import
+              <Upload className="ms-2 h-4 w-4" />
+              {tCommon('import')}
             </Button>
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
               <DialogTrigger asChild>
                 <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Apartment
+                  <Plus className="ms-2 h-4 w-4" />
+                  {t('addApartment')}
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <form onSubmit={handleCreate}>
                   <DialogHeader>
-                    <DialogTitle>Add Apartment</DialogTitle>
+                    <DialogTitle>{t('addApartment')}</DialogTitle>
                     <DialogDescription>
-                      Add a new apartment to the building.
+                      {t('addApartmentDesc')}
                     </DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="number">Apartment Number *</Label>
-                      <Input id="number" name="number" required placeholder="e.g., 101" />
+                      <Label htmlFor="number">{t('apartmentNumber')} *</Label>
+                      <Input id="number" name="number" required placeholder="לדוגמה: 101" />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="grid gap-2">
-                        <Label htmlFor="floor">Floor</Label>
-                        <Input id="floor" name="floor" type="number" placeholder="e.g., 1" />
+                        <Label htmlFor="floor">{t('floor')}</Label>
+                        <Input id="floor" name="floor" type="number" placeholder="לדוגמה: 1" />
                       </div>
                       <div className="grid gap-2">
-                        <Label htmlFor="size">Size (sqft)</Label>
-                        <Input id="size" name="size" type="number" placeholder="e.g., 850" />
+                        <Label htmlFor="size">{t('size')}</Label>
+                        <Input id="size" name="size" type="number" placeholder="לדוגמה: 80" />
                       </div>
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="status">Status</Label>
+                      <Label htmlFor="status">{tCommon('status')}</Label>
                       <Select name="status" defaultValue="active">
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="inactive">Inactive</SelectItem>
+                          <SelectItem value="active">{t('active')}</SelectItem>
+                          <SelectItem value="inactive">{t('inactive')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
                   <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>
-                      Cancel
+                      {tCommon('cancel')}
                     </Button>
                     <Button type="submit" disabled={formLoading}>
-                      {formLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Create
+                      {formLoading && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
+                      {tCommon('add')}
                     </Button>
                   </DialogFooter>
                 </form>
@@ -478,14 +487,14 @@ export default function ApartmentsPage() {
           <DialogContent>
             <form onSubmit={handleEdit}>
               <DialogHeader>
-                <DialogTitle>Edit Apartment</DialogTitle>
+                <DialogTitle>{t('editApartment')}</DialogTitle>
                 <DialogDescription>
-                  Update apartment details.
+                  {t('editApartmentDesc')}
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-number">Apartment Number *</Label>
+                  <Label htmlFor="edit-number">{t('apartmentNumber')} *</Label>
                   <Input
                     id="edit-number"
                     name="number"
@@ -495,7 +504,7 @@ export default function ApartmentsPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-floor">Floor</Label>
+                    <Label htmlFor="edit-floor">{t('floor')}</Label>
                     <Input
                       id="edit-floor"
                       name="floor"
@@ -504,7 +513,7 @@ export default function ApartmentsPage() {
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="edit-size">Size (sqft)</Label>
+                    <Label htmlFor="edit-size">{t('size')}</Label>
                     <Input
                       id="edit-size"
                       name="size"
@@ -514,25 +523,25 @@ export default function ApartmentsPage() {
                   </div>
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-status">Status</Label>
+                  <Label htmlFor="edit-status">{tCommon('status')}</Label>
                   <Select name="status" defaultValue={selectedApartment?.status}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
+                      <SelectItem value="active">{t('active')}</SelectItem>
+                      <SelectItem value="inactive">{t('inactive')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>
-                  Cancel
+                  {tCommon('cancel')}
                 </Button>
                 <Button type="submit" disabled={formLoading}>
-                  {formLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Changes
+                  {formLoading && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
+                  {tCommon('save')}
                 </Button>
               </DialogFooter>
             </form>
@@ -555,17 +564,17 @@ export default function ApartmentsPage() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5" />
-                Residents - Apt. {selectedApartment?.number}
+                {tResidents('title')} - {t('apt')} {selectedApartment?.number}
               </DialogTitle>
               <DialogDescription>
-                Manage residents for this apartment
+                {t('manageResidents')}
               </DialogDescription>
             </DialogHeader>
             
             <Tabs defaultValue="active" className="flex-1 overflow-hidden flex flex-col">
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="active">Active ({activeResidents.length})</TabsTrigger>
-                <TabsTrigger value="history">History ({residentHistory.length})</TabsTrigger>
+                <TabsTrigger value="active">{tResidents('active')} ({activeResidents.length})</TabsTrigger>
+                <TabsTrigger value="history">{tResidents('history')} ({residentHistory.length})</TabsTrigger>
               </TabsList>
               
               <TabsContent value="active" className="flex-1 overflow-auto">
@@ -576,7 +585,7 @@ export default function ApartmentsPage() {
                 ) : activeResidents.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p>No active residents</p>
+                    <p>{tResidents('noActiveResidents')}</p>
                   </div>
                 ) : (
                   <div className="space-y-3 py-2">
@@ -587,14 +596,14 @@ export default function ApartmentsPage() {
                             <div>
                               <p className="font-medium">{resident.fullName}</p>
                               <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
-                                <Badge variant="outline" className="capitalize">{resident.type}</Badge>
-                                {resident.email && <span>{resident.email}</span>}
-                                {resident.phone && <span>{resident.phone}</span>}
+                                <Badge variant="outline">{resident.type === 'owner' ? tResidents('owner') : tResidents('tenant')}</Badge>
+                                {resident.email && <span dir="ltr">{resident.email}</span>}
+                                {resident.phone && <span dir="ltr">{resident.phone}</span>}
                               </div>
                               {resident.moveInAt && (
                                 <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                                   <Calendar className="h-3 w-3" />
-                                  Moved in: {new Date(resident.moveInAt).toLocaleDateString()}
+                                  {tResidents('moveInDate')}: {new Date(resident.moveInAt).toLocaleDateString('he-IL')}
                                 </p>
                               )}
                             </div>
@@ -606,8 +615,8 @@ export default function ApartmentsPage() {
                                 setIsMoveOutOpen(true);
                               }}
                             >
-                              <UserMinus className="mr-1 h-4 w-4" />
-                              Move Out
+                              <UserMinus className="ms-1 h-4 w-4" />
+                              {tResidents('moveOut')}
                             </Button>
                           </div>
                         </CardContent>
@@ -625,7 +634,7 @@ export default function ApartmentsPage() {
                 ) : residentHistory.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <History className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p>No history</p>
+                    <p>{tResidents('noHistory')}</p>
                   </div>
                 ) : (
                   <div className="space-y-3 py-2">
@@ -635,24 +644,24 @@ export default function ApartmentsPage() {
                           <div>
                             <p className="font-medium text-muted-foreground">{resident.fullName}</p>
                             <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
-                              <Badge variant="secondary" className="capitalize">{resident.type}</Badge>
-                              {resident.email && <span>{resident.email}</span>}
+                              <Badge variant="secondary">{resident.type === 'owner' ? tResidents('owner') : tResidents('tenant')}</Badge>
+                              {resident.email && <span dir="ltr">{resident.email}</span>}
                             </div>
                             <div className="text-xs text-muted-foreground mt-2 space-y-1">
                               {resident.moveInAt && (
                                 <p className="flex items-center gap-1">
                                   <Calendar className="h-3 w-3" />
-                                  Moved in: {new Date(resident.moveInAt).toLocaleDateString()}
+                                  {tResidents('moveInDate')}: {new Date(resident.moveInAt).toLocaleDateString('he-IL')}
                                 </p>
                               )}
                               {resident.moveOutAt && (
                                 <p className="flex items-center gap-1">
                                   <UserMinus className="h-3 w-3" />
-                                  Moved out: {new Date(resident.moveOutAt).toLocaleDateString()}
+                                  {tResidents('moveOutDate')}: {new Date(resident.moveOutAt).toLocaleDateString('he-IL')}
                                 </p>
                               )}
                               {resident.moveOutNote && (
-                                <p className="italic">Note: {resident.moveOutNote}</p>
+                                <p className="italic">{tCommon('notes')}: {resident.moveOutNote}</p>
                               )}
                             </div>
                           </div>
@@ -666,11 +675,11 @@ export default function ApartmentsPage() {
 
             <DialogFooter className="border-t pt-4">
               <Button variant="outline" onClick={() => setIsResidentsOpen(false)}>
-                Close
+                {tCommon('close')}
               </Button>
               <Button onClick={() => setIsMoveInOpen(true)}>
-                <UserPlus className="mr-2 h-4 w-4" />
-                Move In New Resident
+                <UserPlus className="ms-2 h-4 w-4" />
+                {tResidents('moveIn')}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -681,46 +690,46 @@ export default function ApartmentsPage() {
           <DialogContent>
             <form onSubmit={handleMoveIn}>
               <DialogHeader>
-                <DialogTitle>Move In Resident</DialogTitle>
+                <DialogTitle>{tResidents('moveIn')}</DialogTitle>
                 <DialogDescription>
-                  Add a new resident to Apt. {selectedApartment?.number}
+                  {tResidents('moveInDesc')} {t('apt')} {selectedApartment?.number}
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="movein-fullName">Full Name *</Label>
-                  <Input id="movein-fullName" name="fullName" required placeholder="John Doe" />
+                  <Label htmlFor="movein-fullName">{tResidents('fullName')} *</Label>
+                  <Input id="movein-fullName" name="fullName" required placeholder="ישראל ישראלי" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="movein-email">Email</Label>
-                    <Input id="movein-email" name="email" type="email" placeholder="john@example.com" />
+                    <Label htmlFor="movein-email">{tResidents('email')}</Label>
+                    <Input id="movein-email" name="email" type="email" placeholder="israel@example.com" dir="ltr" />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="movein-phone">Phone</Label>
-                    <Input id="movein-phone" name="phone" placeholder="+1 234 567 890" />
+                    <Label htmlFor="movein-phone">{tResidents('phone')}</Label>
+                    <Input id="movein-phone" name="phone" placeholder="050-1234567" dir="ltr" />
                   </div>
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="movein-type">Type</Label>
+                  <Label htmlFor="movein-type">{tResidents('type')}</Label>
                   <Select name="type" defaultValue="owner">
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="owner">Owner</SelectItem>
-                      <SelectItem value="tenant">Tenant</SelectItem>
+                      <SelectItem value="owner">{tResidents('owner')}</SelectItem>
+                      <SelectItem value="tenant">{tResidents('tenant')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsMoveInOpen(false)}>
-                  Cancel
+                  {tCommon('cancel')}
                 </Button>
                 <Button type="submit" disabled={formLoading}>
-                  {formLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Move In
+                  {formLoading && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
+                  {tResidents('moveIn')}
                 </Button>
               </DialogFooter>
             </form>
@@ -737,37 +746,37 @@ export default function ApartmentsPage() {
         }}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Move Out Resident</DialogTitle>
+              <DialogTitle>{tResidents('moveOut')}</DialogTitle>
               <DialogDescription>
-                This will mark {selectedResident?.fullName} as moved out.
+                {tResidents('moveOutConfirm')} {selectedResident?.fullName}
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="rounded-lg bg-muted p-4">
                 <div className="text-sm">
-                  <p><strong>Name:</strong> {selectedResident?.fullName}</p>
-                  <p><strong>Type:</strong> {selectedResident?.type}</p>
+                  <p><strong>{tResidents('fullName')}:</strong> {selectedResident?.fullName}</p>
+                  <p><strong>{tResidents('type')}:</strong> {selectedResident?.type === 'owner' ? tResidents('owner') : tResidents('tenant')}</p>
                   {selectedResident?.moveInAt && (
-                    <p><strong>Moved in:</strong> {new Date(selectedResident.moveInAt).toLocaleDateString()}</p>
+                    <p><strong>{tResidents('moveInDate')}:</strong> {new Date(selectedResident.moveInAt).toLocaleDateString('he-IL')}</p>
                   )}
                 </div>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="moveout-note">Reason / Note (optional)</Label>
+                <Label htmlFor="moveout-note">{tResidents('moveOutNote')} ({tCommon('optional')})</Label>
                 <Input
                   id="moveout-note"
-                  placeholder="e.g., Relocated to another city"
+                  placeholder="לדוגמה: עבר לעיר אחרת"
                   value={moveOutNote}
                   onChange={(e) => setMoveOutNote(e.target.value)}
                 />
               </div>
               <p className="text-sm text-muted-foreground">
-                ⚠️ If this resident has a user account, it will be disabled.
+                ⚠️ {tResidents('moveOutWarning')}
               </p>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsMoveOutOpen(false)}>
-                Cancel
+                {tCommon('cancel')}
               </Button>
               <Button 
                 type="button" 
@@ -775,8 +784,8 @@ export default function ApartmentsPage() {
                 onClick={handleMoveOut} 
                 disabled={formLoading}
               >
-                {formLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Confirm Move Out
+                {formLoading && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
+                {tCommon('confirm')}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -791,26 +800,26 @@ export default function ApartmentsPage() {
         }}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Deactivate Apartment</DialogTitle>
+              <DialogTitle>{t('deactivateApartment')}</DialogTitle>
               <DialogDescription>
-                Are you sure you want to deactivate Apt. {selectedApartment?.number}?
+                {t('deactivateConfirm')} {t('apt')} {selectedApartment?.number}?
               </DialogDescription>
             </DialogHeader>
             <div className="py-4">
               <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-4">
                 <p className="text-sm text-amber-700 dark:text-amber-400">
-                  <strong>Note:</strong> Deactivating an apartment will:
+                  <strong>{tCommon('warning')}:</strong> {t('deactivateNote')}:
                 </p>
                 <ul className="text-sm text-amber-700 dark:text-amber-400 mt-2 list-disc list-inside space-y-1">
-                  <li>Mark the apartment as inactive</li>
-                  <li>Exclude it from monthly charges generation</li>
-                  <li>Keep all historical data and balances intact</li>
+                  <li>{t('deactivateEffect1')}</li>
+                  <li>{t('deactivateEffect2')}</li>
+                  <li>{t('deactivateEffect3')}</li>
                 </ul>
               </div>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsDeactivateOpen(false)}>
-                Cancel
+                {tCommon('cancel')}
               </Button>
               <Button 
                 type="button" 
@@ -818,8 +827,8 @@ export default function ApartmentsPage() {
                 onClick={handleDeactivate} 
                 disabled={formLoading}
               >
-                {formLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Deactivate Apartment
+                {formLoading && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
+                {t('deactivateApartment')}
               </Button>
             </DialogFooter>
           </DialogContent>
