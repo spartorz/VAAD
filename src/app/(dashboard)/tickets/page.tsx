@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
+import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { Header } from '@/components/layout/header';
 import { DataTable } from '@/components/data-table';
@@ -64,6 +65,10 @@ const statusColors: Record<string, string> = {
 
 export default function TicketsPage() {
   const { data: session } = useSession();
+  const t = useTranslations('tickets');
+  const tApartments = useTranslations('apartments');
+  const tCommon = useTranslations('common');
+  const tErrors = useTranslations('errors');
   const isResident = session?.user?.role === 'RESIDENT';
   
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -93,11 +98,11 @@ export default function TicketsPage() {
         setPagination(result.data.pagination);
       }
     } catch (error) {
-      toast.error('Failed to fetch tickets');
+      toast.error(tErrors('loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [pagination.page, pagination.limit, search, statusFilter]);
+  }, [pagination.page, pagination.limit, search, statusFilter, tErrors]);
 
   useEffect(() => {
     fetchTickets();
@@ -132,23 +137,44 @@ export default function TicketsPage() {
 
       const result = await response.json();
       if (result.success) {
-        toast.success('Ticket created');
+        toast.success(t('ticketCreated'));
         setIsCreateOpen(false);
         fetchTickets();
       } else {
         toast.error(result.error);
       }
     } catch (error) {
-      toast.error('Failed to create ticket');
+      toast.error(tErrors('createFailed'));
     } finally {
       setFormLoading(false);
     }
   };
 
+  const getPriorityLabel = (priority: string) => {
+    const labels: Record<string, string> = {
+      low: t('low'),
+      medium: t('medium'),
+      high: t('high'),
+      urgent: t('urgent'),
+    };
+    return labels[priority] || priority;
+  };
+
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      open: t('statusOpen'),
+      in_progress: t('statusInProgress'),
+      waiting_vendor: t('statusWaitingVendor'),
+      resolved: t('statusResolved'),
+      closed: t('statusClosed'),
+    };
+    return labels[status] || status;
+  };
+
   const columns: ColumnDef<Ticket>[] = [
     {
       accessorKey: 'title',
-      header: 'Title',
+      header: t('subject'),
       cell: ({ row }) => (
         <div>
           <Link href={`/tickets/${row.original._id}`} className="font-medium hover:underline">
@@ -162,36 +188,36 @@ export default function TicketsPage() {
     },
     {
       accessorKey: 'apartmentId',
-      header: 'Apartment',
-      cell: ({ row }) => row.original.apartmentId ? `Apt. ${row.original.apartmentId.number}` : 'Building',
+      header: tApartments('apartment'),
+      cell: ({ row }) => row.original.apartmentId ? `${tApartments('apt')} ${row.original.apartmentId.number}` : t('buildingWide'),
     },
     {
       accessorKey: 'priority',
-      header: 'Priority',
+      header: t('priority'),
       cell: ({ row }) => (
         <Badge className={priorityColors[row.original.priority]}>
-          {row.original.priority === 'urgent' && <AlertTriangle className="h-3 w-3 mr-1" />}
-          {row.original.priority}
+          {row.original.priority === 'urgent' && <AlertTriangle className="h-3 w-3 ms-1" />}
+          {getPriorityLabel(row.original.priority)}
         </Badge>
       ),
     },
     {
       accessorKey: 'status',
-      header: 'Status',
+      header: tCommon('status'),
       cell: ({ row }) => (
         <Badge className={statusColors[row.original.status] || 'bg-gray-100'}>
-          {row.original.status.replace('_', ' ')}
+          {getStatusLabel(row.original.status)}
         </Badge>
       ),
     },
     {
       accessorKey: 'createdBy',
-      header: 'Created By',
-      cell: ({ row }) => row.original.createdBy?.name || 'Unknown',
+      header: t('createdBy'),
+      cell: ({ row }) => row.original.createdBy?.name || '-',
     },
     {
       accessorKey: 'createdAt',
-      header: 'Date',
+      header: tCommon('date'),
       cell: ({ row }) => formatDate(row.original.createdAt),
     },
     {
@@ -199,8 +225,8 @@ export default function TicketsPage() {
       cell: ({ row }) => (
         <Button variant="ghost" size="sm" asChild>
           <Link href={`/tickets/${row.original._id}`}>
-            <Eye className="h-4 w-4 mr-1" />
-            View
+            <Eye className="h-4 w-4 ms-1" />
+            {tCommon('view')}
           </Link>
         </Button>
       ),
@@ -209,14 +235,14 @@ export default function TicketsPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <Header title="Maintenance Tickets" />
+      <Header title={t('title')} />
       
       <div className="flex-1 p-4 lg:p-6 space-y-4">
         {/* Actions */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex gap-2 flex-1">
             <Input
-              placeholder="Search tickets..."
+              placeholder={t('searchPlaceholder')}
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -229,15 +255,15 @@ export default function TicketsPage() {
               setPagination((p) => ({ ...p, page: 1 }));
             }}>
               <SelectTrigger className="w-40">
-                <SelectValue placeholder="Filter status" />
+                <SelectValue placeholder={t('filterStatus')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="open">Open</SelectItem>
-                <SelectItem value="in_progress">In Progress</SelectItem>
-                <SelectItem value="waiting_vendor">Waiting Vendor</SelectItem>
-                <SelectItem value="resolved">Resolved</SelectItem>
-                <SelectItem value="closed">Closed</SelectItem>
+                <SelectItem value="all">{tCommon('all')}</SelectItem>
+                <SelectItem value="open">{t('statusOpen')}</SelectItem>
+                <SelectItem value="in_progress">{t('statusInProgress')}</SelectItem>
+                <SelectItem value="waiting_vendor">{t('statusWaitingVendor')}</SelectItem>
+                <SelectItem value="resolved">{t('statusResolved')}</SelectItem>
+                <SelectItem value="closed">{t('statusClosed')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -245,52 +271,52 @@ export default function TicketsPage() {
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
               <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                New Ticket
+                <Plus className="ms-2 h-4 w-4" />
+                {t('addTicket')}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <form onSubmit={handleCreate}>
                 <DialogHeader>
-                  <DialogTitle>Create Ticket</DialogTitle>
-                  <DialogDescription>Report a maintenance issue or request.</DialogDescription>
+                  <DialogTitle>{t('addTicket')}</DialogTitle>
+                  <DialogDescription>{t('addTicketDesc')}</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">
-                    <Label>Title *</Label>
-                    <Input name="title" required placeholder="Brief description of the issue" />
+                    <Label>{t('subject')} *</Label>
+                    <Input name="title" required placeholder={t('subjectPlaceholder')} />
                   </div>
                   <div className="grid gap-2">
-                    <Label>Description *</Label>
+                    <Label>{tCommon('description')} *</Label>
                     <Textarea 
                       name="description" 
                       required 
-                      placeholder="Provide details about the issue..."
+                      placeholder={t('descriptionPlaceholder')}
                       rows={4}
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
-                      <Label>Priority</Label>
+                      <Label>{t('priority')}</Label>
                       <Select name="priority" defaultValue="medium">
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="low">Low</SelectItem>
-                          <SelectItem value="medium">Medium</SelectItem>
-                          <SelectItem value="high">High</SelectItem>
-                          <SelectItem value="urgent">Urgent</SelectItem>
+                          <SelectItem value="low">{t('low')}</SelectItem>
+                          <SelectItem value="medium">{t('medium')}</SelectItem>
+                          <SelectItem value="high">{t('high')}</SelectItem>
+                          <SelectItem value="urgent">{t('urgent')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     {!isResident && (
                       <div className="grid gap-2">
-                        <Label>Apartment</Label>
+                        <Label>{tApartments('apartment')}</Label>
                         <Select name="apartmentId">
-                          <SelectTrigger><SelectValue placeholder="Building-wide" /></SelectTrigger>
+                          <SelectTrigger><SelectValue placeholder={t('buildingWide')} /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">Building-wide</SelectItem>
+                            <SelectItem value="">{t('buildingWide')}</SelectItem>
                             {apartments.map((apt) => (
-                              <SelectItem key={apt._id} value={apt._id}>Apt. {apt.number}</SelectItem>
+                              <SelectItem key={apt._id} value={apt._id}>{tApartments('apt')} {apt.number}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -299,10 +325,10 @@ export default function TicketsPage() {
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+                  <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>{tCommon('cancel')}</Button>
                   <Button type="submit" disabled={formLoading}>
-                    {formLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Create Ticket
+                    {formLoading && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
+                    {tCommon('add')}
                   </Button>
                 </DialogFooter>
               </form>
