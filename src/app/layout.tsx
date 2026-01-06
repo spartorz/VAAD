@@ -1,28 +1,35 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Heebo } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/components/providers';
+import { NextIntlClientProvider } from 'next-intl';
+import { getMessages } from 'next-intl/server';
 
-const inter = Inter({
-  subsets: ['latin'],
+// Heebo is a beautiful Hebrew-supporting font
+const heebo = Heebo({
+  subsets: ['hebrew', 'latin'],
   display: 'swap',
-  variable: '--font-inter',
+  variable: '--font-heebo',
 });
 
 export const metadata: Metadata = {
-  title: 'VAAD - Building Committee Management',
-  description: 'Professional HOA and Building Committee Management System',
+  title: 'ועד בית - מערכת ניהול בניין',
+  description: 'מערכת מקצועית לניהול ועד בית ובניינים משותפים',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const messages = await getMessages();
+
   return (
-    <html lang="en" className={inter.variable}>
-      <body className="min-h-screen antialiased">
-        <Providers>{children}</Providers>
+    <html lang="he" dir="rtl" className={heebo.variable}>
+      <body className="min-h-screen antialiased font-sans">
+        <NextIntlClientProvider messages={messages}>
+          <Providers>{children}</Providers>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

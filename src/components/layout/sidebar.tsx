@@ -3,10 +3,10 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -35,26 +35,27 @@ import { useState } from 'react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 
 interface NavItem {
-  title: string;
+  titleKey: string;
   href: string;
   icon: React.ElementType;
   roles?: string[];
 }
 
 const navigation: NavItem[] = [
-  { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { title: 'Apartments', href: '/apartments', icon: Home, roles: ['ADMIN', 'BOARD', 'TREASURER', 'MANAGEMENT'] },
-  { title: 'Residents', href: '/residents', icon: Users, roles: ['ADMIN', 'BOARD', 'TREASURER', 'MANAGEMENT'] },
-  { title: 'Billing', href: '/billing', icon: CreditCard },
-  { title: 'Tickets', href: '/tickets', icon: Wrench },
-  { title: 'Vendors', href: '/vendors', icon: Truck, roles: ['ADMIN', 'BOARD', 'MANAGEMENT'] },
-  { title: 'Documents', href: '/documents', icon: FileText },
-  { title: 'Audit Log', href: '/audit-log', icon: ClipboardList, roles: ['ADMIN', 'BOARD', 'MANAGEMENT'] },
-  { title: 'Settings', href: '/settings', icon: Settings, roles: ['ADMIN', 'BOARD', 'TREASURER', 'MANAGEMENT'] },
+  { titleKey: 'dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { titleKey: 'apartments', href: '/apartments', icon: Home, roles: ['ADMIN', 'BOARD', 'TREASURER', 'MANAGEMENT'] },
+  { titleKey: 'residents', href: '/residents', icon: Users, roles: ['ADMIN', 'BOARD', 'TREASURER', 'MANAGEMENT'] },
+  { titleKey: 'billing', href: '/billing', icon: CreditCard },
+  { titleKey: 'tickets', href: '/tickets', icon: Wrench },
+  { titleKey: 'vendors', href: '/vendors', icon: Truck, roles: ['ADMIN', 'BOARD', 'MANAGEMENT'] },
+  { titleKey: 'documents', href: '/documents', icon: FileText },
+  { titleKey: 'auditLog', href: '/audit-log', icon: ClipboardList, roles: ['ADMIN', 'BOARD', 'MANAGEMENT'] },
+  { titleKey: 'settings', href: '/settings', icon: Settings, roles: ['ADMIN', 'BOARD', 'TREASURER', 'MANAGEMENT'] },
 ];
 
 function NavLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
   const pathname = usePathname();
+  const t = useTranslations('nav');
   const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
   return (
@@ -69,13 +70,15 @@ function NavLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
       )}
     >
       <item.icon className="h-4 w-4" />
-      {item.title}
+      {t(item.titleKey)}
     </Link>
   );
 }
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { data: session } = useSession();
+  const t = useTranslations('nav');
+  const tCommon = useTranslations('common');
   const userRole = session?.user?.role;
 
   const filteredNavigation = navigation.filter(
@@ -87,7 +90,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       {/* Logo */}
       <div className="flex h-16 items-center gap-2 border-b px-4">
         <Building2 className="h-7 w-7 text-primary" />
-        <span className="text-xl font-bold tracking-tight">VAAD</span>
+        <span className="text-xl font-bold tracking-tight">{tCommon('appName')}</span>
       </div>
 
       {/* Navigation */}
@@ -112,9 +115,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                   {session?.user?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'U'}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex flex-1 flex-col items-start text-left">
+              <div className="flex flex-1 flex-col items-start text-right">
                 <span className="text-sm font-medium truncate max-w-[140px]">
-                  {session?.user?.name || 'User'}
+                  {session?.user?.name || 'משתמש'}
                 </span>
                 <span className="text-xs text-muted-foreground">
                   {session?.user?.role}
@@ -123,7 +126,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               <ChevronDown className="h-4 w-4 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuContent align="start" className="w-56">
             <DropdownMenuLabel>
               <div className="flex flex-col">
                 <span>{session?.user?.name}</span>
@@ -137,8 +140,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               onClick={() => signOut({ callbackUrl: '/login' })}
               className="text-red-600 focus:text-red-600"
             >
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign out
+              <LogOut className="ms-2 h-4 w-4" />
+              {t('signOut')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -149,7 +152,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
 export function Sidebar() {
   return (
-    <aside className="hidden lg:flex h-screen w-64 flex-col border-r bg-card">
+    <aside className="hidden lg:flex h-screen w-64 flex-col border-s bg-card">
       <SidebarContent />
     </aside>
   );
@@ -163,13 +166,12 @@ export function MobileNav() {
       <SheetTrigger asChild>
         <Button variant="ghost" size="icon" className="lg:hidden">
           <Menu className="h-5 w-5" />
-          <span className="sr-only">Toggle menu</span>
+          <span className="sr-only">תפריט</span>
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-64 p-0">
+      <SheetContent side="right" className="w-64 p-0">
         <SidebarContent onNavigate={() => setOpen(false)} />
       </SheetContent>
     </Sheet>
   );
 }
-

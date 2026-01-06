@@ -86,18 +86,18 @@ export function DataTable<TData, TValue>({
       {/* Search */}
       {(onSearch || searchColumn) && (
         <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder={searchPlaceholder}
             value={searchValue}
             onChange={(e) => handleSearch(e.target.value)}
-            className="pl-9"
+            className="ps-9"
           />
         </div>
       )}
 
       {/* Table */}
-      <div className="rounded-lg border bg-card">
+      <div className="rounded-lg border bg-card overflow-visible">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -163,7 +163,7 @@ export function DataTable<TData, TValue>({
             Showing {Math.min((pagination.page - 1) * pagination.limit + 1, pagination.total)} to{' '}
             {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} results
           </p>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="icon"
