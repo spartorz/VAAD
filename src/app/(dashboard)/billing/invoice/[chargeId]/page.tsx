@@ -133,16 +133,32 @@ export default function InvoicePage() {
   const handleDownload = async () => {
     setDownloading(true);
     try {
-      // Log the download action
-      await fetch(`/api/invoices/${chargeId}`, {
-        method: 'POST',
-      });
-
-      // For now, trigger print dialog as PDF download
-      // In production, this would call a server-side PDF generation endpoint
-      window.print();
+      // Download PDF from server endpoint
+      const response = await fetch(`/api/invoices/${chargeId}/pdf`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate PDF');
+      }
+      
+      // Get the blob and create download link
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Extract filename from Content-Disposition header or use default
+      const contentDisposition = response.headers.get('Content-Disposition');
+      const filenameMatch = contentDisposition?.match(/filename="?([^"]+)"?/);
+      link.download = filenameMatch?.[1] || `invoice-${chargeId}.pdf`;
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
       toast.success(t('downloadInitiated'));
     } catch (error) {
+      console.error('Download error:', error);
       toast.error(t('failedToDownload'));
     } finally {
       setDownloading(false);

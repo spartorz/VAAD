@@ -47,7 +47,8 @@ export type AuditAction =
   | 'import_data'
   | 'invoice_view'
   | 'invoice_download'
-  | 'invoice_issued';
+  | 'invoice_issued'
+  | 'invoice_pdf_download';
 
 // Audit Entity Types
 export type AuditEntityType = 
