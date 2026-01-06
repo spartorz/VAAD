@@ -3,6 +3,7 @@
 import { useState, Suspense } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,6 +14,9 @@ import { Building2, Loader2, AlertCircle } from 'lucide-react';
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const t = useTranslations('auth');
+  const tCommon = useTranslations('common');
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -33,13 +37,13 @@ function LoginForm() {
       });
 
       if (result?.error) {
-        setError(result.error);
+        setError(t('invalidCredentials'));
       } else {
         router.push(callbackUrl);
         router.refresh();
       }
     } catch (err) {
-      setError('An unexpected error occurred');
+      setError(t('invalidCredentials'));
     } finally {
       setLoading(false);
     }
@@ -52,9 +56,9 @@ function LoginForm() {
           <Building2 className="h-8 w-8 text-white" />
         </div>
         <div>
-          <CardTitle className="text-2xl font-bold tracking-tight">Welcome to VAAD</CardTitle>
+          <CardTitle className="text-2xl font-bold tracking-tight">{t('welcomeBack')}</CardTitle>
           <CardDescription className="mt-2">
-            Building Committee Management System
+            {t('loginSubtitle')}
           </CardDescription>
         </div>
       </CardHeader>
@@ -68,7 +72,7 @@ function LoginForm() {
           )}
           
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-sm font-medium">Email</Label>
+            <Label htmlFor="email" className="text-sm font-medium">{t('email')}</Label>
             <Input
               id="email"
               type="email"
@@ -78,11 +82,12 @@ function LoginForm() {
               required
               className="h-11"
               disabled={loading}
+              dir="ltr"
             />
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="password" className="text-sm font-medium">Password</Label>
+            <Label htmlFor="password" className="text-sm font-medium">{t('password')}</Label>
             <Input
               id="password"
               type="password"
@@ -92,6 +97,7 @@ function LoginForm() {
               required
               className="h-11"
               disabled={loading}
+              dir="ltr"
             />
           </div>
 
@@ -102,30 +108,30 @@ function LoginForm() {
           >
             {loading ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Signing in...
+                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                {t('signingIn')}
               </>
             ) : (
-              'Sign in'
+              t('signIn')
             )}
           </Button>
         </form>
 
         <div className="mt-6 pt-6 border-t">
           <p className="text-center text-sm text-muted-foreground">
-            Demo credentials:
+            {t('demoUsers')}
           </p>
           <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-lg bg-muted/50 p-2">
-              <p className="font-medium">Board Member</p>
-              <p className="text-muted-foreground">board@demo.com</p>
+              <p className="font-medium">{t('boardMember')}</p>
+              <p className="text-muted-foreground" dir="ltr">board@demo.com</p>
             </div>
             <div className="rounded-lg bg-muted/50 p-2">
-              <p className="font-medium">Resident</p>
-              <p className="text-muted-foreground">resident@demo.com</p>
+              <p className="font-medium">{t('resident')}</p>
+              <p className="text-muted-foreground" dir="ltr">resident@demo.com</p>
             </div>
           </div>
-          <p className="text-center text-xs text-muted-foreground mt-2">Password: demo123</p>
+          <p className="text-center text-xs text-muted-foreground mt-2">{t('demoPassword')}</p>
         </div>
       </CardContent>
     </Card>

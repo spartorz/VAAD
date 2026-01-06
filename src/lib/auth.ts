@@ -30,10 +30,31 @@ export const authOptions: NextAuthOptions = {
           throw new Error('Email and password are required');
         }
 
-        await dbConnect();
+        // Dev-only diagnostics (never log passwords or secrets)
+        try {
+          await dbConnect();
+          if (process.env.NODE_ENV === 'development') {
+            const mongoose = await import('mongoose');
+            console.log('[auth] MONGODB connected:', mongoose.default.connection.readyState === 1);
+          }
+        } catch (dbError) {
+          if (process.env.NODE_ENV === 'development') {
+            console.error('[auth] MONGODB connection failed:', (dbError as Error).message);
+          }
+          throw new Error('בעיה זמנית בהתחברות למסד הנתונים. נסה שוב בעוד רגע.');
+        }
 
         const user = await User.findOne({ email: credentials.email.toLowerCase() });
         
+        // Dev-only diagnostics
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[auth] user found by email:', !!user);
+          if (user) {
+            console.log('[auth] user.isActive:', user.isActive);
+            console.log('[auth] passwordHash exists:', !!user.passwordHash);
+          }
+        }
+
         if (!user) {
           throw new Error('Invalid credentials');
         }
@@ -45,6 +66,11 @@ export const authOptions: NextAuthOptions = {
 
         const isValid = await user.comparePassword(credentials.password);
         
+        // Dev-only diagnostics
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[auth] bcrypt compare result:', isValid);
+        }
+
         if (!isValid) {
           throw new Error('Invalid credentials');
         }

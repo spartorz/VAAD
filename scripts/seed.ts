@@ -234,6 +234,7 @@ async function seed() {
     console.log(`✅ Created ${residents.length} residents\n`);
 
     // Create users
+    // NOTE: Seed uses inline schemas WITHOUT pre-save hook, so we hash here directly
     console.log('👤 Creating users...');
     const passwordHash = await bcrypt.hash('demo123', 12);
 

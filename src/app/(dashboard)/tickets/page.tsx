@@ -121,11 +121,12 @@ export default function TicketsPage() {
     setFormLoading(true);
 
     const formData = new FormData(e.currentTarget);
+    const apartmentIdValue = formData.get('apartmentId');
     const data = {
       title: formData.get('title'),
       description: formData.get('description'),
       priority: formData.get('priority') || 'medium',
-      apartmentId: formData.get('apartmentId') || undefined,
+      apartmentId: apartmentIdValue && apartmentIdValue !== 'none' ? apartmentIdValue : undefined,
     };
 
     try {
@@ -311,10 +312,10 @@ export default function TicketsPage() {
                     {!isResident && (
                       <div className="grid gap-2">
                         <Label>{tApartments('apartment')}</Label>
-                        <Select name="apartmentId">
+                        <Select name="apartmentId" defaultValue="none">
                           <SelectTrigger><SelectValue placeholder={t('buildingWide')} /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">{t('buildingWide')}</SelectItem>
+                            <SelectItem value="none">{t('buildingWide')}</SelectItem>
                             {apartments.map((apt) => (
                               <SelectItem key={apt._id} value={apt._id}>{tApartments('apt')} {apt.number}</SelectItem>
                             ))}

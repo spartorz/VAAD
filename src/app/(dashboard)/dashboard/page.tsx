@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
+import { useTranslations } from 'next-intl';
 import { Header } from '@/components/layout/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -66,6 +67,7 @@ interface DashboardData {
 
 export default function DashboardPage() {
   const { data: session } = useSession();
+  const t = useTranslations('dashboard');
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -88,10 +90,11 @@ export default function DashboardPage() {
   }, []);
 
   const isResident = data?.type === 'resident';
+  const userName = session?.user?.name?.split(' ')[0] || '';
 
   return (
     <div className="flex flex-col h-full">
-      <Header title={`Welcome, ${session?.user?.name?.split(' ')[0] || 'User'}`} />
+      <Header title={t('welcome', { name: userName })} />
       
       <div className="flex-1 p-4 lg:p-6 space-y-6">
         {loading ? (
@@ -126,6 +129,10 @@ function DashboardSkeleton() {
 }
 
 function ResidentDashboard({ data }: { data: DashboardData | null }) {
+  const t = useTranslations('dashboard');
+  const tBilling = useTranslations('billing');
+  const tTickets = useTranslations('tickets');
+  const tApartments = useTranslations('apartments');
   const balance = data?.balance;
   const hasBalance = balance && balance.balance > 0;
 
@@ -137,10 +144,10 @@ function ResidentDashboard({ data }: { data: DashboardData | null }) {
           <Home className="h-5 w-5 text-primary" />
         </div>
         <div>
-          <p className="text-sm text-muted-foreground">Your Apartment</p>
+          <p className="text-sm text-muted-foreground">{t('yourApartment')}</p>
           <p className="text-lg font-semibold">
-            Apt. {data?.apartment?.number || 'N/A'}
-            {data?.apartment?.floor && ` • Floor ${data.apartment.floor}`}
+            {tApartments('apartmentNumber')} {data?.apartment?.number || 'N/A'}
+            {data?.apartment?.floor && ` • ${tApartments('floor')} ${data.apartment.floor}`}
           </p>
         </div>
       </div>
@@ -150,7 +157,7 @@ function ResidentDashboard({ data }: { data: DashboardData | null }) {
         <CardHeader className="pb-2">
           <CardTitle className="text-lg flex items-center gap-2">
             <DollarSign className="h-5 w-5" />
-            Your Balance
+            {t('yourBalance')}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -160,18 +167,18 @@ function ResidentDashboard({ data }: { data: DashboardData | null }) {
             </span>
             {!hasBalance && (
               <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">
-                Paid up!
+                {t('paidUp')}
               </Badge>
             )}
           </div>
           {hasBalance && (
             <p className="text-sm text-amber-600 mt-2">
-              Please make a payment to settle your outstanding balance.
+              {t('pleasePayBalance')}
             </p>
           )}
           <div className="mt-4 flex gap-2">
             <Button asChild size="sm">
-              <Link href="/billing">View Statement</Link>
+              <Link href="/billing">{tBilling('myStatement')}</Link>
             </Button>
           </div>
         </CardContent>
@@ -181,7 +188,7 @@ function ResidentDashboard({ data }: { data: DashboardData | null }) {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Total Charges</CardTitle>
+            <CardTitle className="text-base">{tBilling('totalDue')}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">
@@ -191,7 +198,7 @@ function ResidentDashboard({ data }: { data: DashboardData | null }) {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Total Payments</CardTitle>
+            <CardTitle className="text-base">{tBilling('totalPaid')}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-green-600">
@@ -205,10 +212,10 @@ function ResidentDashboard({ data }: { data: DashboardData | null }) {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">My Tickets</CardTitle>
+            <CardTitle className="text-lg">{t('myTickets')}</CardTitle>
             <Button variant="ghost" size="sm" asChild>
               <Link href="/tickets">
-                View all <ArrowRight className="ml-1 h-4 w-4" />
+                {t('viewAll')} <ArrowRight className="mr-1 h-4 w-4" />
               </Link>
             </Button>
           </div>
@@ -234,12 +241,12 @@ function ResidentDashboard({ data }: { data: DashboardData | null }) {
             </div>
           ) : (
             <p className="text-center text-muted-foreground py-4">
-              No open tickets
+              {t('noOpenTickets')}
             </p>
           )}
           <div className="mt-4">
             <Button asChild variant="outline" className="w-full">
-              <Link href="/tickets">Create New Ticket</Link>
+              <Link href="/tickets">{tTickets('addTicket')}</Link>
             </Button>
           </div>
         </CardContent>
@@ -249,37 +256,42 @@ function ResidentDashboard({ data }: { data: DashboardData | null }) {
 }
 
 function ManagementDashboard({ data }: { data: DashboardData | null }) {
+  const t = useTranslations('dashboard');
+  const tBilling = useTranslations('billing');
+  const tApartments = useTranslations('apartments');
+  const tDocuments = useTranslations('documents');
+  
   return (
     <div className="space-y-6">
       {/* Overview Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Apartments</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('totalApartments')}</CardTitle>
             <Home className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{data?.overview?.totalApartments || 0}</div>
-            <p className="text-xs text-muted-foreground">Active units</p>
+            <p className="text-xs text-muted-foreground">{t('activeUnits')}</p>
           </CardContent>
         </Card>
 
         <Card className={data?.overview?.outstandingBalance && data.overview.outstandingBalance > 0 ? 'border-amber-200' : ''}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Outstanding Balance</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('outstandingBalance')}</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
               {formatCurrency(data?.overview?.outstandingBalance || 0)}
             </div>
-            <p className="text-xs text-muted-foreground">Across all apartments</p>
+            <p className="text-xs text-muted-foreground">{t('acrossAllApartments')}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Open Tickets</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('openTickets')}</CardTitle>
             <Wrench className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -287,17 +299,17 @@ function ManagementDashboard({ data }: { data: DashboardData | null }) {
             {data?.tickets?.urgent ? (
               <p className="text-xs text-red-600 flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3" />
-                {data.tickets.urgent} urgent
+                {data.tickets.urgent} {t('urgent')}
               </p>
             ) : (
-              <p className="text-xs text-muted-foreground">No urgent tickets</p>
+              <p className="text-xs text-muted-foreground">{t('noUrgentTickets')}</p>
             )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Payments This Month</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('paymentsThisMonth')}</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -305,7 +317,7 @@ function ManagementDashboard({ data }: { data: DashboardData | null }) {
               {formatCurrency(data?.paymentsThisMonth?.total || 0)}
             </div>
             <p className="text-xs text-muted-foreground">
-              {data?.paymentsThisMonth?.count || 0} payments
+              {data?.paymentsThisMonth?.count || 0} {tBilling('payments')}
             </p>
           </CardContent>
         </Card>
@@ -316,32 +328,32 @@ function ManagementDashboard({ data }: { data: DashboardData | null }) {
         {/* Quick Actions */}
         <Card>
           <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Common management tasks</CardDescription>
+            <CardTitle>{t('quickActions')}</CardTitle>
+            <CardDescription>{t('commonManagementTasks')}</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-3">
             <Button asChild variant="outline" className="h-auto py-4 flex-col gap-2">
               <Link href="/billing?tab=generate">
                 <DollarSign className="h-5 w-5" />
-                Generate Monthly Charges
+                {tBilling('generateMonthlyCharges')}
               </Link>
             </Button>
             <Button asChild variant="outline" className="h-auto py-4 flex-col gap-2">
               <Link href="/billing?tab=payments">
                 <TrendingUp className="h-5 w-5" />
-                Record Payment
+                {tBilling('recordPayment')}
               </Link>
             </Button>
             <Button asChild variant="outline" className="h-auto py-4 flex-col gap-2">
               <Link href="/apartments?import=true">
                 <Home className="h-5 w-5" />
-                Import Apartments
+                {t('importApartments')}
               </Link>
             </Button>
             <Button asChild variant="outline" className="h-auto py-4 flex-col gap-2">
               <Link href="/documents">
                 <FileText className="h-5 w-5" />
-                Upload Document
+                {tDocuments('uploadFile')}
               </Link>
             </Button>
           </CardContent>
@@ -351,10 +363,10 @@ function ManagementDashboard({ data }: { data: DashboardData | null }) {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Recent Activity</CardTitle>
+              <CardTitle>{t('recentActivity')}</CardTitle>
               <Button variant="ghost" size="sm" asChild>
                 <Link href="/audit-log">
-                  View all <ArrowRight className="ml-1 h-4 w-4" />
+                  {t('viewAll')} <ArrowRight className="mr-1 h-4 w-4" />
                 </Link>
               </Button>
             </div>
@@ -381,7 +393,7 @@ function ManagementDashboard({ data }: { data: DashboardData | null }) {
               </div>
             ) : (
               <p className="text-center text-muted-foreground py-4">
-                No recent activity
+                {t('noRecentActivity')}
               </p>
             )}
           </CardContent>

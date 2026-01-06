@@ -104,6 +104,7 @@
   },
   "apartments": {
     "title": "דירות",
+    "apartment": "דירה",
     "addApartment": "הוסף דירה",
     "addApartmentDesc": "הוספת דירה חדשה לבניין",
     "editApartment": "עריכת דירה",
@@ -400,7 +401,9 @@
     "forbidden": "הגישה נדחתה",
     "serverError": "שגיאת שרת",
     "networkError": "שגיאת רשת",
-    "sessionExpired": "הפעילות הסתיימה. יש להתחבר מחדש."
+    "sessionExpired": "הפעילות הסתיימה. יש להתחבר מחדש.",
+    "loadFailed": "טעינה נכשלה. נסה שוב.",
+    "createFailed": "היצירה נכשלה. נסה שוב."
   },
   "success": {
     "saved": "נשמר בהצלחה",

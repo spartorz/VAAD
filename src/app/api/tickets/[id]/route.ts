@@ -1,9 +1,17 @@
 import { NextRequest } from 'next/server';
 import { withAuth, successResponse, errorResponse, createAuditLog } from '@/lib/api-utils';
-import { ticketUpdateSchema, ticketCommentSchema } from '@/lib/validations';
-import { canManageBuilding, canAccessApartment } from '@/lib/auth';
+import { ticketUpdateSchema } from '@/lib/validations';
+import { canAccessApartment } from '@/lib/auth';
 import MaintenanceTicket from '@/models/MaintenanceTicket';
+import Apartment from '@/models/Apartment';
+import Vendor from '@/models/Vendor';
+import User from '@/models/User';
 import { Types } from 'mongoose';
+
+// Ensure models are registered for populate
+void Apartment;
+void Vendor;
+void User;
 
 // GET /api/tickets/[id] - Get single ticket
 export const GET = withAuth(async (request, { user, params }) => {
