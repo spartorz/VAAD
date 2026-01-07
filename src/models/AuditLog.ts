@@ -22,7 +22,7 @@ const auditLogSchema = new Schema<IAuditLog>(
     actorName: String,
     action: { 
       type: String, 
-      enum: ['create', 'update', 'void', 'delete', 'login', 'generate_charges', 'import_data', 'import_apartments', 'import_residents', 'export_billing_monthly', 'export_apartments', 'export_residents', 'export_payments', 'export_audit', 'whatsapp_reminder_copied'],
+      enum: ['create', 'update', 'void', 'delete', 'login', 'generate_charges', 'import_data', 'import_apartments', 'import_residents', 'export_billing_monthly', 'export_apartments', 'export_residents', 'export_payments', 'export_audit', 'whatsapp_reminder_copied', 'notification_open_whatsapp', 'invoice_view', 'invoice_download', 'invoice_issued', 'invoice_pdf_download'],
       required: true 
     },
     entityType: { 

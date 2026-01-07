@@ -30,6 +30,7 @@ import {
   ChevronDown,
   Menu,
   Settings,
+  Bell,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -46,6 +47,7 @@ const navigation: NavItem[] = [
   { titleKey: 'apartments', href: '/apartments', icon: Home, roles: ['ADMIN', 'BOARD', 'TREASURER', 'MANAGEMENT'] },
   { titleKey: 'residents', href: '/residents', icon: Users, roles: ['ADMIN', 'BOARD', 'TREASURER', 'MANAGEMENT'] },
   { titleKey: 'billing', href: '/billing', icon: CreditCard },
+  { titleKey: 'notifications', href: '/notifications', icon: Bell, roles: ['ADMIN', 'BOARD', 'TREASURER', 'MANAGEMENT'] },
   { titleKey: 'tickets', href: '/tickets', icon: Wrench },
   { titleKey: 'vendors', href: '/vendors', icon: Truck, roles: ['ADMIN', 'BOARD', 'MANAGEMENT'] },
   { titleKey: 'documents', href: '/documents', icon: FileText },

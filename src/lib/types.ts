@@ -53,6 +53,7 @@ export type AuditAction =
   | 'export_payments'
   | 'export_audit'
   | 'whatsapp_reminder_copied'
+  | 'notification_open_whatsapp'
   | 'invoice_view'
   | 'invoice_download'
   | 'invoice_issued'

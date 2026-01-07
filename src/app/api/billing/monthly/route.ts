@@ -5,7 +5,16 @@ import Charge from '@/models/Charge';
 import Payment from '@/models/Payment';
 import Apartment from '@/models/Apartment';
 import Building from '@/models/Building';
+import Resident from '@/models/Resident';
 import { Types } from 'mongoose';
+
+interface ResidentInfo {
+  _id: string;
+  fullName: string;
+  phone?: string;
+  email?: string;
+  type: 'owner' | 'tenant';
+}
 
 interface ApartmentBillingSummary {
   apartmentId: string;
@@ -16,6 +25,7 @@ interface ApartmentBillingSummary {
   paidThisMonth: number;
   remaining: number;
   status: 'paid' | 'partial' | 'unpaid' | 'no_charge';
+  residents?: ResidentInfo[];
   payments: Array<{
     _id: string;
     amount: number;
@@ -29,6 +39,7 @@ interface ApartmentBillingSummary {
 export const GET = withAuth(async (request, { user }) => {
   const { searchParams } = new URL(request.url);
   const period = searchParams.get('period');
+  const includeResidents = searchParams.get('includeResidents') === 'true';
 
   // Validate period format (YYYY-MM)
   if (!period || !/^\d{4}-\d{2}$/.test(period)) {
@@ -92,6 +103,29 @@ export const GET = withAuth(async (request, { user }) => {
     paymentsMap.get(aptId)!.push(payment);
   }
 
+  // Optionally fetch residents for all apartments
+  let residentsMap = new Map<string, ResidentInfo[]>();
+  if (includeResidents) {
+    const residents = await Resident.find({
+      buildingId,
+      isActive: true,
+    }).lean();
+    
+    for (const resident of residents) {
+      const aptId = resident.apartmentId.toString();
+      if (!residentsMap.has(aptId)) {
+        residentsMap.set(aptId, []);
+      }
+      residentsMap.get(aptId)!.push({
+        _id: resident._id.toString(),
+        fullName: resident.fullName,
+        phone: resident.phone,
+        email: resident.email,
+        type: resident.type as 'owner' | 'tenant',
+      });
+    }
+  }
+
   // Build summary for each apartment
   const summaries: ApartmentBillingSummary[] = apartments.map((apt) => {
     const aptId = apt._id.toString();
@@ -113,7 +147,7 @@ export const GET = withAuth(async (request, { user }) => {
       status = 'unpaid';
     }
 
-    return {
+    const summary: ApartmentBillingSummary = {
       apartmentId: aptId,
       apartmentNumber: apt.number,
       floor: apt.floor,
@@ -130,6 +164,13 @@ export const GET = withAuth(async (request, { user }) => {
         reference: p.reference,
       })),
     };
+
+    // Add residents if requested
+    if (includeResidents) {
+      summary.residents = residentsMap.get(aptId) || [];
+    }
+
+    return summary;
   });
 
   // Calculate totals
