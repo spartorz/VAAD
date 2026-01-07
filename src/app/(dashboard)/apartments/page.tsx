@@ -32,7 +32,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ColumnDef } from '@tanstack/react-table';
-import { Plus, MoreHorizontal, Pencil, Upload, Loader2, Users, UserPlus, UserMinus, Calendar, History, Ban } from 'lucide-react';
+import { Plus, MoreHorizontal, Pencil, Upload, Loader2, Users, UserPlus, UserMinus, Calendar, History, Ban, Download, FileSpreadsheet, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
@@ -410,9 +410,15 @@ export default function ApartmentsPage() {
             />
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" asChild>
+              <a href="/api/import/templates/apartments" download>
+                <Download className="ms-2 h-4 w-4" />
+                {t('downloadTemplate')}
+              </a>
+            </Button>
             <Button variant="outline" onClick={() => setIsImportOpen(true)}>
-              <Upload className="ms-2 h-4 w-4" />
-              {tCommon('import')}
+              <FileSpreadsheet className="ms-2 h-4 w-4" />
+              {tCommon('import')} Excel
             </Button>
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
               <DialogTrigger asChild>
@@ -838,6 +844,26 @@ export default function ApartmentsPage() {
   );
 }
 
+interface ImportResult {
+  dryRun: boolean;
+  summary: {
+    totalRows: number;
+    created: number;
+    updated: number;
+    skipped: number;
+    errors: number;
+  };
+  errors: Array<{ row: number; sheet: string; field: string; message: string }>;
+  preview: Array<{
+    apartmentNumber: string;
+    floor: number | null;
+    sizeSqft: number | null;
+    status: string;
+    notes: string;
+    action: 'create' | 'update' | 'skip';
+  }>;
+}
+
 function ImportDialog({ 
   open, 
   onOpenChange, 
@@ -847,47 +873,34 @@ function ImportDialog({
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
 }) {
+  const t = useTranslations('apartments');
+  const tCommon = useTranslations('common');
+  const tImport = useTranslations('import');
+  const tErrors = useTranslations('errors');
+  
   const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload');
-  const [data, setData] = useState<any[]>([]);
-  const [previewResult, setPreviewResult] = useState<any>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [previewResult, setPreviewResult] = useState<ImportResult | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+    }
+  };
 
+  const handleDryRun = async () => {
+    if (!file) return;
     setLoading(true);
     
     try {
-      // For CSV files, parse client-side
-      const text = await file.text();
-      const lines = text.split('\n').filter(line => line.trim());
-      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-      
-      const parsedData = lines.slice(1).map(line => {
-        const values = line.split(',').map(v => v.trim());
-        const row: Record<string, string> = {};
-        headers.forEach((header, i) => {
-          row[header] = values[i] || '';
-        });
-        return {
-          apartmentNumber: row['apartment'] || row['number'] || row['apt'] || row['unit'] || '',
-          floor: row['floor'] || '',
-          size: row['size'] || row['sqft'] || '',
-          residentName: row['resident'] || row['name'] || row['owner'] || '',
-          residentEmail: row['email'] || '',
-          residentPhone: row['phone'] || '',
-          residentType: row['type'] || 'owner',
-        };
-      }).filter(row => row.apartmentNumber);
+      const formData = new FormData();
+      formData.append('file', file);
 
-      setData(parsedData);
-
-      // Preview the import
-      const response = await fetch('/api/import', {
+      const response = await fetch('/api/import/apartments?dryRun=1', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: parsedData, mode: 'preview' }),
+        body: formData,
       });
 
       const result = await response.json();
@@ -895,23 +908,26 @@ function ImportDialog({
         setPreviewResult(result.data);
         setStep('preview');
       } else {
-        toast.error(result.error || 'Failed to preview import');
+        toast.error(result.error || tImport('previewFailed'));
       }
     } catch (error) {
-      toast.error('Failed to parse file');
+      toast.error(tImport('previewFailed'));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleImport = async () => {
+  const handleCommit = async () => {
+    if (!file) return;
     setLoading(true);
     
     try {
-      const response = await fetch('/api/import', {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/import/apartments?dryRun=0', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data, mode: 'import' }),
+        body: formData,
       });
 
       const result = await response.json();
@@ -919,12 +935,15 @@ function ImportDialog({
         setPreviewResult(result.data);
         setStep('done');
         onSuccess();
-        toast.success(`Imported ${result.data.created.apartments} apartments and ${result.data.created.residents} residents`);
+        toast.success(tImport('importSuccess', { 
+          created: result.data.summary.created, 
+          updated: result.data.summary.updated 
+        }));
       } else {
-        toast.error(result.error || 'Failed to import');
+        toast.error(result.error || tImport('importFailed'));
       }
     } catch (error) {
-      toast.error('Failed to import');
+      toast.error(tImport('importFailed'));
     } finally {
       setLoading(false);
     }
@@ -932,119 +951,274 @@ function ImportDialog({
 
   const handleClose = () => {
     setStep('upload');
-    setData([]);
+    setFile(null);
     setPreviewResult(null);
     onOpenChange(false);
   };
 
+  const handleDownloadErrorReport = async () => {
+    if (!previewResult) return;
+    
+    try {
+      const response = await fetch('/api/import/errors-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          errors: previewResult.errors,
+          preview: previewResult.preview,
+          importType: 'apartments',
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to generate report');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `import_error_report_apartments_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success(tImport('errorReportDownloaded'));
+    } catch {
+      toast.error(tErrors('generic'));
+    }
+  };
+
+  const getActionIcon = (action: string) => {
+    switch (action) {
+      case 'create': return <CheckCircle className="h-4 w-4 text-green-600" />;
+      case 'update': return <AlertCircle className="h-4 w-4 text-blue-600" />;
+      case 'skip': return <XCircle className="h-4 w-4 text-gray-400" />;
+      default: return null;
+    }
+  };
+
+  const getActionLabel = (action: string) => {
+    switch (action) {
+      case 'create': return tImport('actionCreate');
+      case 'update': return tImport('actionUpdate');
+      case 'skip': return tImport('actionSkip');
+      default: return action;
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>
-            {step === 'upload' && 'Import Apartments & Residents'}
-            {step === 'preview' && 'Preview Import'}
-            {step === 'done' && 'Import Complete'}
+          <DialogTitle className="flex items-center gap-2">
+            <FileSpreadsheet className="h-5 w-5" />
+            {step === 'upload' && tImport('importApartments')}
+            {step === 'preview' && tImport('previewImport')}
+            {step === 'done' && tImport('importComplete')}
           </DialogTitle>
           <DialogDescription>
-            {step === 'upload' && 'Upload a CSV file with apartment and resident data.'}
-            {step === 'preview' && 'Review the data before importing.'}
-            {step === 'done' && 'Your data has been imported successfully.'}
+            {step === 'upload' && tImport('uploadExcelDesc')}
+            {step === 'preview' && tImport('reviewBeforeCommit')}
+            {step === 'done' && tImport('importSuccessDesc')}
           </DialogDescription>
         </DialogHeader>
 
-        {step === 'upload' && (
-          <div className="py-4">
-            <div className="border-2 border-dashed rounded-lg p-8 text-center">
-              <input
-                type="file"
-                accept=".csv"
-                onChange={handleFileUpload}
-                className="hidden"
-                id="file-upload"
-                disabled={loading}
-              />
-              <label
-                htmlFor="file-upload"
-                className="cursor-pointer flex flex-col items-center gap-2"
-              >
-                {loading ? (
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                ) : (
-                  <Upload className="h-8 w-8 text-muted-foreground" />
-                )}
-                <span className="text-sm text-muted-foreground">
-                  {loading ? 'Processing...' : 'Click to upload CSV file'}
-                </span>
-              </label>
-            </div>
-            <p className="text-xs text-muted-foreground mt-4">
-              CSV should have columns: apartment/number, floor, size, resident/name, email, phone, type (owner/tenant)
-            </p>
-          </div>
-        )}
-
-        {step === 'preview' && previewResult && (
-          <div className="py-4 space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-3 rounded-lg bg-green-50 border border-green-200">
-                <p className="text-sm font-medium text-green-700">To Create</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {previewResult.created.apartments} apartments
-                </p>
-                <p className="text-sm text-green-600">
-                  {previewResult.created.residents} residents
-                </p>
-              </div>
-              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
-                <p className="text-sm font-medium text-amber-700">To Skip</p>
-                <p className="text-2xl font-bold text-amber-600">
-                  {previewResult.skipped.apartments} existing
-                </p>
-              </div>
-            </div>
-            {previewResult.errors.length > 0 && (
-              <div className="p-3 rounded-lg bg-red-50 border border-red-200">
-                <p className="text-sm font-medium text-red-700">
-                  {previewResult.errors.length} rows with errors
-                </p>
-                <ul className="text-xs text-red-600 mt-1 list-disc list-inside">
-                  {previewResult.errors.slice(0, 3).map((err: any, i: number) => (
-                    <li key={i}>Row {err.row}: {err.error}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-
-        {step === 'done' && previewResult && (
-          <div className="py-4">
-            <div className="p-4 rounded-lg bg-green-50 border border-green-200 text-center">
-              <p className="text-lg font-medium text-green-700">Success!</p>
-              <p className="text-sm text-green-600 mt-1">
-                Created {previewResult.created.apartments} apartments and{' '}
-                {previewResult.created.residents} residents
-              </p>
-            </div>
-          </div>
-        )}
-
-        <DialogFooter>
+        <div className="flex-1 overflow-auto py-4">
           {step === 'upload' && (
-            <Button variant="outline" onClick={handleClose}>Cancel</Button>
+            <div className="space-y-4">
+              <div className="border-2 border-dashed rounded-lg p-8 text-center">
+                <input
+                  type="file"
+                  accept=".xlsx"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  id="excel-upload"
+                  disabled={loading}
+                />
+                <label
+                  htmlFor="excel-upload"
+                  className="cursor-pointer flex flex-col items-center gap-2"
+                >
+                  {file ? (
+                    <>
+                      <FileSpreadsheet className="h-12 w-12 text-green-600" />
+                      <span className="text-sm font-medium">{file.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {(file.size / 1024).toFixed(1)} KB
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-12 w-12 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">
+                        {tImport('clickToUpload')}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {tImport('xlsxOnly')}
+                      </span>
+                    </>
+                  )}
+                </label>
+              </div>
+              
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Download className="h-4 w-4" />
+                <span>{tImport('needTemplate')}</span>
+                <a 
+                  href="/api/import/templates/apartments" 
+                  download 
+                  className="text-primary hover:underline"
+                >
+                  {t('downloadTemplate')}
+                </a>
+              </div>
+            </div>
+          )}
+
+          {step === 'preview' && previewResult && (
+            <div className="space-y-4">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-4 gap-3">
+                <div className="p-3 rounded-lg bg-muted text-center">
+                  <p className="text-2xl font-bold">{previewResult.summary.totalRows}</p>
+                  <p className="text-xs text-muted-foreground">{tImport('totalRows')}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950/30 text-center">
+                  <p className="text-2xl font-bold text-green-600">{previewResult.summary.created}</p>
+                  <p className="text-xs text-green-600">{tImport('toCreate')}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-center">
+                  <p className="text-2xl font-bold text-blue-600">{previewResult.summary.updated}</p>
+                  <p className="text-xs text-blue-600">{tImport('toUpdate')}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 text-center">
+                  <p className="text-2xl font-bold text-amber-600">{previewResult.summary.errors}</p>
+                  <p className="text-xs text-amber-600">{tImport('errors')}</p>
+                </div>
+              </div>
+
+              {/* Errors Table */}
+              {previewResult.errors.length > 0 && (
+                <div className="rounded-lg border border-red-200 dark:border-red-800 overflow-hidden">
+                  <div className="bg-red-50 dark:bg-red-950/30 px-3 py-2 border-b border-red-200 dark:border-red-800 flex items-center justify-between">
+                    <p className="text-sm font-medium text-red-700 dark:text-red-400">
+                      {tImport('errorsFound', { count: previewResult.errors.length })}
+                    </p>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleDownloadErrorReport}
+                      className="h-7 text-xs"
+                    >
+                      <Download className="ms-1 h-3 w-3" />
+                      {tImport('downloadErrorReport')}
+                    </Button>
+                  </div>
+                  <div className="max-h-32 overflow-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-red-50/50 dark:bg-red-950/20">
+                        <tr>
+                          <th className="px-3 py-1 text-start">{tImport('row')}</th>
+                          <th className="px-3 py-1 text-start">{tImport('field')}</th>
+                          <th className="px-3 py-1 text-start">{tImport('message')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {previewResult.errors.map((err, i) => (
+                          <tr key={i} className="border-t border-red-100 dark:border-red-900">
+                            <td className="px-3 py-1">{err.row}</td>
+                            <td className="px-3 py-1">{err.field}</td>
+                            <td className="px-3 py-1 text-red-600">{err.message}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Preview Table */}
+              {previewResult.preview.length > 0 && (
+                <div className="rounded-lg border overflow-hidden">
+                  <div className="bg-muted px-3 py-2 border-b">
+                    <p className="text-sm font-medium">{tImport('preview')}</p>
+                  </div>
+                  <div className="max-h-48 overflow-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50 sticky top-0">
+                        <tr>
+                          <th className="px-3 py-2 text-start">{tImport('action')}</th>
+                          <th className="px-3 py-2 text-start">{t('apartmentNumber')}</th>
+                          <th className="px-3 py-2 text-start">{t('floor')}</th>
+                          <th className="px-3 py-2 text-start">{t('size')}</th>
+                          <th className="px-3 py-2 text-start">{tCommon('status')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {previewResult.preview.map((row, i) => (
+                          <tr key={i} className="border-t">
+                            <td className="px-3 py-2">
+                              <div className="flex items-center gap-1">
+                                {getActionIcon(row.action)}
+                                <span className="text-xs">{getActionLabel(row.action)}</span>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 font-medium">{row.apartmentNumber}</td>
+                            <td className="px-3 py-2">{row.floor ?? '-'}</td>
+                            <td className="px-3 py-2">{row.sizeSqft ?? '-'}</td>
+                            <td className="px-3 py-2">
+                              <Badge variant={row.status === 'active' ? 'default' : 'secondary'}>
+                                {row.status}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === 'done' && previewResult && (
+            <div className="py-4">
+              <div className="p-6 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-center">
+                <CheckCircle className="h-12 w-12 text-green-600 mx-auto mb-3" />
+                <p className="text-lg font-medium text-green-700 dark:text-green-400">
+                  {tImport('importComplete')}!
+                </p>
+                <p className="text-sm text-green-600 mt-2">
+                  {tImport('importSummary', {
+                    created: previewResult.summary.created,
+                    updated: previewResult.summary.updated,
+                  })}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="border-t pt-4">
+          {step === 'upload' && (
+            <>
+              <Button variant="outline" onClick={handleClose}>{tCommon('cancel')}</Button>
+              <Button onClick={handleDryRun} disabled={!file || loading}>
+                {loading && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
+                {tImport('dryRun')}
+              </Button>
+            </>
           )}
           {step === 'preview' && (
             <>
-              <Button variant="outline" onClick={() => setStep('upload')}>Back</Button>
-              <Button onClick={handleImport} disabled={loading}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Import Data
+              <Button variant="outline" onClick={() => setStep('upload')}>{tCommon('back')}</Button>
+              <Button onClick={handleCommit} disabled={loading || previewResult?.summary.errors === previewResult?.summary.totalRows}>
+                {loading && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
+                {tImport('commitImport')}
               </Button>
             </>
           )}
           {step === 'done' && (
-            <Button onClick={handleClose}>Done</Button>
+            <Button onClick={handleClose}>{tCommon('close')}</Button>
           )}
         </DialogFooter>
       </DialogContent>

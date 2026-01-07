@@ -29,7 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ColumnDef } from '@tanstack/react-table';
-import { Plus, Loader2, DollarSign, Calendar, XCircle, ChevronLeft, ChevronRight, Building2, CheckCircle2, Clock, AlertCircle, FileText } from 'lucide-react';
+import { Plus, Loader2, DollarSign, Calendar, XCircle, ChevronLeft, ChevronRight, Building2, CheckCircle2, Clock, AlertCircle, FileText, Download, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatCurrency, formatDate } from '@/lib/hooks';
 
@@ -860,6 +860,7 @@ function MonthlyOverviewTab() {
     period: string;
     currency: string;
     defaultMonthlyAmount: number;
+    buildingName: string;
     summary: MonthlySummary;
     apartments: ApartmentBilling[];
   } | null>(null);
@@ -962,6 +963,68 @@ function MonthlyOverviewTab() {
     return apt.status === statusFilter;
   }) || [];
 
+  const handleExportExcel = async () => {
+    try {
+      const response = await fetch(`/api/exports/billing/monthly?period=${period}`);
+      if (!response.ok) throw new Error('Export failed');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `monthly_collections_${period}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success(t('exportSuccess'));
+    } catch {
+      toast.error(tErrors('generic'));
+    }
+  };
+
+  const handleCopyWhatsappReminder = async (apt: ApartmentBilling) => {
+    if (!apt.chargeId || !data) return;
+
+    // Build the message
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const invoiceLink = `${baseUrl}/billing/invoice/${apt.chargeId}`;
+    const reference = `VAAD-${apt.apartmentNumber}-${period}`;
+    const amount = apt.remaining > 0 ? apt.remaining : apt.monthlyDue;
+    const buildingName = data.buildingName || 'ועד הבית';
+
+    // Format period display (e.g., "ינואר 2026")
+    const [year, month] = period.split('-').map(Number);
+    const periodDisplay = new Date(year, month - 1, 1).toLocaleDateString('he-IL', { year: 'numeric', month: 'long' });
+
+    const message = `שלום דייר/ת,
+
+תזכורת ידידותית לתשלום ועד בית עבור ${periodDisplay}.
+
+סכום לתשלום: ₪${amount.toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+אסמכתא: ${reference}
+
+לצפייה בחשבונית:
+${invoiceLink}
+
+תודה,
+${buildingName}`;
+
+    try {
+      await navigator.clipboard.writeText(message);
+      toast.success(t('whatsappReminderCopied'));
+
+      // Log the action (fire-and-forget)
+      fetch('/api/reminders/whatsapp/copy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chargeId: apt.chargeId, source: 'monthly_overview' }),
+      }).catch(() => {});
+    } catch {
+      toast.error(tErrors('copyFailed'));
+    }
+  };
+
   const columns: ColumnDef<ApartmentBilling>[] = [
     {
       accessorKey: 'apartmentNumber',
@@ -1009,16 +1072,34 @@ function MonthlyOverviewTab() {
     },
     {
       id: 'actions',
-      cell: ({ row }) => (
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => openPaymentModal(row.original)}
-        >
-          <DollarSign className="h-3 w-3 ms-1" />
-          {t('recordPayment')}
-        </Button>
-      ),
+      cell: ({ row }) => {
+        const apt = row.original;
+        const showWhatsapp = (apt.status === 'unpaid' || apt.status === 'partial') && apt.chargeId;
+        
+        return (
+          <div className="flex items-center gap-2">
+            {showWhatsapp && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleCopyWhatsappReminder(apt)}
+                title={tCommon('copyWhatsapp')}
+              >
+                <MessageCircle className="h-3 w-3 ms-1" />
+                {tCommon('copyWhatsapp')}
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => openPaymentModal(apt)}
+            >
+              <DollarSign className="h-3 w-3 ms-1" />
+              {t('recordPayment')}
+            </Button>
+          </div>
+        );
+      },
     },
   ];
 
@@ -1045,12 +1126,18 @@ function MonthlyOverviewTab() {
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
-        <Input
-          type="month"
-          value={period}
-          onChange={(e) => setPeriod(e.target.value)}
-          className="w-auto"
-        />
+        <div className="flex items-center gap-2">
+          <Input
+            type="month"
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            className="w-auto"
+          />
+          <Button variant="outline" onClick={handleExportExcel} disabled={!data}>
+            <Download className="ms-2 h-4 w-4" />
+            {t('exportExcel')}
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}

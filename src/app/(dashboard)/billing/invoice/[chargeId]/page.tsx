@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
 import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,7 @@ import {
   Printer,
   Copy,
   Link2,
+  MessageCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatCurrency, formatDate } from '@/lib/hooks';
@@ -90,13 +92,18 @@ function generatePaymentReference(apartmentNumber: string, period?: string): str
 export default function InvoicePage() {
   const params = useParams();
   const router = useRouter();
+  const { data: session } = useSession();
   const t = useTranslations('invoice');
   const tBilling = useTranslations('billing');
   const tCommon = useTranslations('common');
   const tApartments = useTranslations('apartments');
   const tSuccess = useTranslations('success');
+  const tErrors = useTranslations('errors');
   const chargeId = params.chargeId as string;
   const invoiceRef = useRef<HTMLDivElement>(null);
+
+  // Check if user can manage finances (non-resident)
+  const canSendReminders = session?.user?.role && session.user.role !== 'RESIDENT';
 
   const [data, setData] = useState<InvoiceData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -186,6 +193,57 @@ export default function InvoicePage() {
       toast.success(tSuccess('copied'));
     } catch {
       toast.error(tCommon('error'));
+    }
+  };
+
+  const handleCopyWhatsappReminder = async () => {
+    if (!data) return;
+
+    const { invoice, building, apartment, residents } = data;
+    
+    // Get resident name (prefer owner, fallback to first resident, then default)
+    const owner = residents.find(r => r.type === 'owner');
+    const residentName = owner?.fullName || residents[0]?.fullName || 'דייר/ת';
+    const buildingName = building.name || 'ועד הבית';
+    
+    // Build the message
+    const invoiceLink = typeof window !== 'undefined' ? window.location.href : '';
+    const reference = generatePaymentReference(apartment.number, invoice.charge.period);
+    const amount = invoice.remaining > 0 ? invoice.remaining : invoice.charge.amount;
+
+    // Format period display
+    const periodDisplay = invoice.charge.period 
+      ? (() => {
+          const [year, month] = invoice.charge.period.split('-').map(Number);
+          return new Date(year, month - 1, 1).toLocaleDateString('he-IL', { year: 'numeric', month: 'long' });
+        })()
+      : '';
+
+    const message = `שלום ${residentName},
+
+תזכורת ידידותית לתשלום ועד בית עבור ${periodDisplay}.
+
+סכום לתשלום: ₪${amount.toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+אסמכתא: ${reference}
+
+לצפייה בחשבונית:
+${invoiceLink}
+
+תודה,
+${buildingName}`;
+
+    try {
+      await navigator.clipboard.writeText(message);
+      toast.success(tBilling('whatsappReminderCopied'));
+
+      // Log the action (fire-and-forget)
+      fetch('/api/reminders/whatsapp/copy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chargeId, source: 'invoice_page' }),
+      }).catch(() => {});
+    } catch {
+      toast.error(tErrors('copyFailed'));
     }
   };
 
@@ -280,6 +338,12 @@ export default function InvoicePage() {
             {tCommon('back')}
           </Button>
           <div className="flex gap-2 flex-wrap justify-end">
+            {canSendReminders && (invoice.paymentStatus === 'unpaid' || invoice.paymentStatus === 'partial') && (
+              <Button variant="outline" size="sm" onClick={handleCopyWhatsappReminder}>
+                <MessageCircle className="h-4 w-4 ms-2" />
+                {tBilling('copyWhatsappReminder')}
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={handleCopyReference}>
               <Copy className="h-4 w-4 ms-2" />
               {t('copyReference')}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { Header } from '@/components/layout/header';
 import { DataTable } from '@/components/data-table';
@@ -31,8 +31,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ColumnDef } from '@tanstack/react-table';
-import { Plus, MoreHorizontal, Pencil, Loader2, Mail, Phone, UserMinus, Calendar, Home } from 'lucide-react';
+import { Plus, MoreHorizontal, Pencil, Loader2, Mail, Phone, UserMinus, Calendar, Home, Upload, Download, AlertTriangle, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface Apartment {
   _id: string;
@@ -61,6 +62,41 @@ interface PaginationState {
   totalPages: number;
 }
 
+interface ImportPreviewRow {
+  apartmentNumber: string;
+  fullName: string;
+  type: string;
+  email: string;
+  phone: string;
+  moveInAt: string;
+  action: 'create' | 'skip' | 'error';
+  skipReason?: string;
+  createUser: boolean;
+  userAction?: 'create' | 'skip' | 'error';
+  userSkipReason?: string;
+}
+
+interface ImportError {
+  row: number;
+  sheet: string;
+  field: string;
+  message: string;
+}
+
+interface ImportResult {
+  dryRun: boolean;
+  summary: {
+    totalRows: number;
+    created: number;
+    skipped: number;
+    errors: number;
+    usersCreated: number;
+    usersSkipped: number;
+  };
+  errors: ImportError[];
+  preview: ImportPreviewRow[];
+}
+
 export default function ResidentsPage() {
   const t = useTranslations('residents');
   const tApartments = useTranslations('apartments');
@@ -83,6 +119,14 @@ export default function ResidentsPage() {
   const [selectedResident, setSelectedResident] = useState<Resident | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [moveOutNote, setMoveOutNote] = useState('');
+  
+  // Import state
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importStep, setImportStep] = useState<'upload' | 'preview'>('upload');
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const fetchResidents = useCallback(async () => {
     setLoading(true);
@@ -229,6 +273,138 @@ export default function ResidentsPage() {
     }
   };
 
+  // Import handlers
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await fetch('/api/import/templates/apartments');
+      if (!response.ok) throw new Error('Failed to download');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'vaad_import_template.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success(tApartments('templateDownloaded'));
+    } catch {
+      toast.error(tErrors('generic'));
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.name.endsWith('.xlsx')) {
+        toast.error(tApartments('xlsxOnly'));
+        return;
+      }
+      setImportFile(file);
+    }
+  };
+
+  const handleImportDryRun = async () => {
+    if (!importFile) return;
+    setImportLoading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', importFile);
+
+      const response = await fetch('/api/import/residents?dryRun=1', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setImportResult(result.data);
+        setImportStep('preview');
+      } else {
+        toast.error(result.error || tErrors('generic'));
+      }
+    } catch {
+      toast.error(tErrors('generic'));
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const handleImportCommit = async () => {
+    if (!importFile) return;
+    setImportLoading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', importFile);
+
+      const response = await fetch('/api/import/residents?dryRun=0', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast.success(tApartments('importResidentsSummary')
+          .replace('{created}', result.data.summary.created.toString())
+          .replace('{skipped}', result.data.summary.skipped.toString()));
+        resetImportState();
+        fetchResidents();
+      } else {
+        toast.error(result.error || tErrors('generic'));
+      }
+    } catch {
+      toast.error(tErrors('generic'));
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const resetImportState = () => {
+    setIsImportOpen(false);
+    setImportStep('upload');
+    setImportFile(null);
+    setImportResult(null);
+    if (importInputRef.current) {
+      importInputRef.current.value = '';
+    }
+  };
+
+  const handleDownloadErrorReport = async () => {
+    if (!importResult) return;
+    
+    try {
+      const response = await fetch('/api/import/errors-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          errors: importResult.errors,
+          preview: importResult.preview,
+          importType: 'residents',
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to generate report');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `import_error_report_residents_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success(tApartments('errorReportDownloaded'));
+    } catch {
+      toast.error(tErrors('generic'));
+    }
+  };
+
   const columns: ColumnDef<Resident>[] = [
     {
       accessorKey: 'fullName',
@@ -363,6 +539,218 @@ export default function ResidentsPage() {
                 <SelectItem value="inactive">{t('movedOutStatus')}</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
+              <Download className="ms-2 h-4 w-4" />
+              {tApartments('downloadTemplate')}
+            </Button>
+            <Dialog open={isImportOpen} onOpenChange={(open) => {
+              if (!open) resetImportState();
+              setIsImportOpen(open);
+            }}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Upload className="ms-2 h-4 w-4" />
+                  {tApartments('uploadExcel')}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+                <DialogHeader>
+                  <DialogTitle>{tApartments('importResidents')}</DialogTitle>
+                  <DialogDescription>
+                    {tApartments('importResidentsDesc')}
+                  </DialogDescription>
+                </DialogHeader>
+
+                {importStep === 'upload' && (
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <Label>{tApartments('selectFile')}</Label>
+                      <Input
+                        ref={importInputRef}
+                        type="file"
+                        accept=".xlsx"
+                        onChange={handleFileChange}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        {tApartments('xlsxOnly')}
+                      </p>
+                    </div>
+                    {importFile && (
+                      <div className="rounded-lg bg-muted p-3">
+                        <p className="text-sm font-medium">{importFile.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {(importFile.size / 1024).toFixed(1)} KB
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {importStep === 'preview' && importResult && (
+                  <div className="flex-1 overflow-hidden flex flex-col gap-4 py-4">
+                    {/* Summary */}
+                    <div className="grid grid-cols-3 gap-4 md:grid-cols-6">
+                      <div className="rounded-lg bg-muted p-3 text-center">
+                        <p className="text-2xl font-bold">{importResult.summary.totalRows}</p>
+                        <p className="text-xs text-muted-foreground">{tApartments('totalRows')}</p>
+                      </div>
+                      <div className="rounded-lg bg-green-50 p-3 text-center">
+                        <p className="text-2xl font-bold text-green-600">{importResult.summary.created}</p>
+                        <p className="text-xs text-green-600">{tApartments('toCreate')}</p>
+                      </div>
+                      <div className="rounded-lg bg-yellow-50 p-3 text-center">
+                        <p className="text-2xl font-bold text-yellow-600">{importResult.summary.skipped}</p>
+                        <p className="text-xs text-yellow-600">{tApartments('toSkip')}</p>
+                      </div>
+                      <div className="rounded-lg bg-red-50 p-3 text-center">
+                        <p className="text-2xl font-bold text-red-600">{importResult.summary.errors}</p>
+                        <p className="text-xs text-red-600">{tApartments('errorsCount')}</p>
+                      </div>
+                      <div className="rounded-lg bg-blue-50 p-3 text-center">
+                        <p className="text-2xl font-bold text-blue-600">{importResult.summary.usersCreated}</p>
+                        <p className="text-xs text-blue-600">{tApartments('usersCreated')}</p>
+                      </div>
+                      <div className="rounded-lg bg-orange-50 p-3 text-center">
+                        <p className="text-2xl font-bold text-orange-600">{importResult.summary.usersSkipped}</p>
+                        <p className="text-xs text-orange-600">{tApartments('usersSkipped')}</p>
+                      </div>
+                    </div>
+
+                    {/* Preview Table */}
+                    <ScrollArea className="flex-1 border rounded-lg">
+                      <table className="w-full text-sm">
+                        <thead className="sticky top-0 bg-muted">
+                          <tr>
+                            <th className="p-2 text-right">{tApartments('apartment')}</th>
+                            <th className="p-2 text-right">{t('fullName')}</th>
+                            <th className="p-2 text-right">{t('type')}</th>
+                            <th className="p-2 text-right">{t('email')}</th>
+                            <th className="p-2 text-right">{tCommon('action')}</th>
+                            <th className="p-2 text-right">{tApartments('createUser')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {importResult.preview.map((row, idx) => (
+                            <tr key={idx} className="border-t">
+                              <td className="p-2">{row.apartmentNumber}</td>
+                              <td className="p-2">{row.fullName}</td>
+                              <td className="p-2">{row.type === 'owner' ? t('owner') : t('tenant')}</td>
+                              <td className="p-2" dir="ltr">{row.email || '-'}</td>
+                              <td className="p-2">
+                                {row.action === 'create' && (
+                                  <Badge className="bg-green-100 text-green-700">
+                                    <CheckCircle className="h-3 w-3 ms-1" />
+                                    {tApartments('create')}
+                                  </Badge>
+                                )}
+                                {row.action === 'skip' && (
+                                  <div className="flex flex-col gap-1">
+                                    <Badge className="bg-yellow-100 text-yellow-700">
+                                      <AlertTriangle className="h-3 w-3 ms-1" />
+                                      {tApartments('skip')}
+                                    </Badge>
+                                    {row.skipReason && (
+                                      <span className="text-xs text-muted-foreground">{row.skipReason}</span>
+                                    )}
+                                  </div>
+                                )}
+                                {row.action === 'error' && (
+                                  <Badge className="bg-red-100 text-red-700">
+                                    <XCircle className="h-3 w-3 ms-1" />
+                                    {tApartments('error')}
+                                  </Badge>
+                                )}
+                              </td>
+                              <td className="p-2">
+                                {row.createUser ? (
+                                  row.userAction === 'create' ? (
+                                    <Badge className="bg-blue-100 text-blue-700">
+                                      <CheckCircle className="h-3 w-3 ms-1" />
+                                      {tApartments('userCreated')}
+                                    </Badge>
+                                  ) : row.userAction === 'skip' ? (
+                                    <div className="flex flex-col gap-1">
+                                      <Badge className="bg-orange-100 text-orange-700">
+                                        <AlertTriangle className="h-3 w-3 ms-1" />
+                                        {tApartments('userSkipped')}
+                                      </Badge>
+                                      {row.userSkipReason && (
+                                        <span className="text-xs text-muted-foreground">{row.userSkipReason}</span>
+                                      )}
+                                    </div>
+                                  ) : null
+                                ) : (
+                                  <span className="text-muted-foreground">-</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </ScrollArea>
+
+                    {/* Errors Table */}
+                    {importResult.errors.length > 0 && (
+                      <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="font-medium text-red-700 flex items-center gap-2">
+                            <AlertCircle className="h-4 w-4" />
+                            {tApartments('errorsCount')}: {importResult.errors.length}
+                          </p>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={handleDownloadErrorReport}
+                            className="h-7 text-xs"
+                          >
+                            <Download className="ms-1 h-3 w-3" />
+                            {tApartments('downloadErrorReport')}
+                          </Button>
+                        </div>
+                        <ScrollArea className="max-h-32">
+                          <ul className="text-sm text-red-600 space-y-1">
+                            {importResult.errors.map((err, idx) => (
+                              <li key={idx}>
+                                {tApartments('row')} {err.row}: {err.field} - {err.message}
+                              </li>
+                            ))}
+                          </ul>
+                        </ScrollArea>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <DialogFooter>
+                  {importStep === 'upload' ? (
+                    <>
+                      <Button variant="outline" onClick={resetImportState}>
+                        {tCommon('cancel')}
+                      </Button>
+                      <Button onClick={handleImportDryRun} disabled={!importFile || importLoading}>
+                        {importLoading && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
+                        {tApartments('dryRun')}
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button variant="outline" onClick={() => setImportStep('upload')}>
+                        {tCommon('back')}
+                      </Button>
+                      <Button 
+                        onClick={handleImportCommit} 
+                        disabled={importLoading || importResult?.summary.created === 0}
+                      >
+                        {importLoading && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
+                        {tApartments('commit')} ({importResult?.summary.created || 0})
+                      </Button>
+                    </>
+                  )}
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>

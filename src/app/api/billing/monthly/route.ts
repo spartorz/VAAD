@@ -145,6 +145,7 @@ export const GET = withAuth(async (request, { user }) => {
     period,
     currency,
     defaultMonthlyAmount,
+    buildingName: building.name || '',
     summary: {
       totalApartments: apartments.length,
       totalDue,

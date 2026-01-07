@@ -44,7 +44,9 @@
     "warning": "אזהרה",
     "info": "מידע",
     "noChanges": "אין שינויים",
-    "select": "בחר"
+    "select": "בחר",
+    "copyWhatsapp": "העתק WhatsApp",
+    "copiedToClipboard": "הועתק ללוח"
   },
   "nav": {
     "dashboard": "לוח בקרה",
@@ -105,6 +107,7 @@
   "apartments": {
     "title": "דירות",
     "apartment": "דירה",
+    "downloadTemplate": "הורד תבנית",
     "addApartment": "הוסף דירה",
     "addApartmentDesc": "הוספת דירה חדשה לבניין",
     "editApartment": "עריכת דירה",
@@ -223,7 +226,11 @@
     "noApartmentAssigned": "לא הוקצתה דירה.",
     "accountSummary": "סיכום חשבון",
     "transactionHistory": "היסטוריית תנועות",
-    "noTransactions": "אין תנועות עדיין"
+    "noTransactions": "אין תנועות עדיין",
+    "exportExcel": "ייצוא לאקסל",
+    "exportSuccess": "הייצוא הושלם בהצלחה",
+    "whatsappReminderCopied": "הודעת WhatsApp הועתקה",
+    "copyWhatsappReminder": "העתק הודעת WhatsApp"
   },
   "invoice": {
     "title": "חשבונית",
@@ -403,7 +410,8 @@
     "networkError": "שגיאת רשת",
     "sessionExpired": "הפעילות הסתיימה. יש להתחבר מחדש.",
     "loadFailed": "טעינה נכשלה. נסה שוב.",
-    "createFailed": "היצירה נכשלה. נסה שוב."
+    "createFailed": "היצירה נכשלה. נסה שוב.",
+    "copyFailed": "העתקה נכשלה. נסה שוב."
   },
   "success": {
     "saved": "נשמר בהצלחה",
@@ -411,6 +419,51 @@
     "updated": "עודכן בהצלחה",
     "deleted": "נמחק בהצלחה",
     "copied": "הועתק ללוח"
+  },
+  "import": {
+    "importApartments": "ייבוא דירות",
+    "previewImport": "תצוגה מקדימה",
+    "importComplete": "הייבוא הושלם",
+    "uploadExcelDesc": "העלו קובץ Excel עם נתוני הדירות",
+    "reviewBeforeCommit": "בדקו את הנתונים לפני השמירה",
+    "importSuccessDesc": "הנתונים יובאו בהצלחה למערכת",
+    "clickToUpload": "לחצו להעלאת קובץ",
+    "xlsxOnly": "קבצי Excel בלבד (.xlsx)",
+    "needTemplate": "צריכים תבנית?",
+    "totalRows": "סה״כ שורות",
+    "toCreate": "ליצירה",
+    "toUpdate": "לעדכון",
+    "errors": "שגיאות",
+    "errorsFound": "נמצאו {count} שגיאות",
+    "row": "שורה",
+    "field": "שדה",
+    "message": "הודעה",
+    "preview": "תצוגה מקדימה",
+    "action": "פעולה",
+    "actionCreate": "יצירה",
+    "actionUpdate": "עדכון",
+    "actionSkip": "דילוג",
+    "dryRun": "בדיקה",
+    "commitImport": "ביצוע ייבוא",
+    "previewFailed": "התצוגה המקדימה נכשלה",
+    "importFailed": "הייבוא נכשל",
+    "importSuccess": "יובאו {created} דירות חדשות ועודכנו {updated} דירות",
+    "importSummary": "נוצרו {created} דירות חדשות, עודכנו {updated} דירות",
+    "importResidents": "ייבוא דיירים",
+    "importResidentsDesc": "העלו קובץ Excel עם נתוני הדיירים",
+    "importResidentsSuccess": "יובאו {created} דיירים חדשים",
+    "importResidentsSummary": "נוצרו {created} דיירים חדשים, דולגו {skipped} דיירים",
+    "skipReason": "סיבת דילוג",
+    "duplicateEmail": "אימייל כפול - הדייר כבר קיים",
+    "hasLinkedUser": "יש חשבון משתמש מקושר - יש להשתמש בתהליך עזיבה/כניסה",
+    "usersCreated": "משתמשים שנוצרו",
+    "usersSkipped": "משתמשים שדולגו",
+    "createUser": "יצירת משתמש",
+    "userCreated": "משתמש יווצר",
+    "userSkipped": "משתמש לא יווצר",
+    "userExists": "משתמש כבר קיים",
+    "downloadErrorReport": "הורד דוח שגיאות",
+    "errorReportDownloaded": "דוח השגיאות הורד בהצלחה"
   }
 }
 
