@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Added
+- Added Notifications tab (`/notifications`) for payment reminders (preview + selection).
+- Added WhatsApp click-to-chat sending (single + bulk) from Notifications.
+- Added audit action `notification_open_whatsapp` and logging endpoint `/api/notifications/log`.
+- Extended billing monthly API to optionally include resident details (`includeResidents=true`).
+- Added checkbox UI component for selection.
+- Added Hebrew translations for notifications UI.
+- Added WhatsApp reminder copy button to Billing Monthly Overview and Invoice pages.
+
+### Fixed
+- WhatsApp message formatting with proper line breaks.
+- Invoice page WhatsApp button now only shows for unpaid/partial invoices.
+
+---
+
 ### Planned: i18n + Hebrew Invoices + PDF Export
 
 This section outlines the staged implementation plan for internationalization, Hebrew invoice support, and PDF export functionality.

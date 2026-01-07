@@ -104,7 +104,7 @@ export const GET = withAuth(async (request, { user }) => {
   }
 
   // Optionally fetch residents for all apartments
-  let residentsMap = new Map<string, ResidentInfo[]>();
+  const residentsMap = new Map<string, ResidentInfo[]>();
   if (includeResidents) {
     const residents = await Resident.find({
       buildingId,
