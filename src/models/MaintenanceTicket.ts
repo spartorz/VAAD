@@ -16,6 +16,13 @@ export interface IMaintenanceTicket extends Document {
   createdAt: Date;
   updatedAt: Date;
   resolvedAt?: Date;
+  // Closure fields
+  closedAt?: Date;
+  closedByUserId?: Types.ObjectId;
+  resolutionNotes?: string;
+  invoiceDocumentId?: Types.ObjectId;
+  costAmount?: number;
+  costCurrency?: string;
 }
 
 const attachmentSchema = new Schema({
@@ -53,6 +60,13 @@ const maintenanceTicketSchema = new Schema<IMaintenanceTicket>(
     attachments: [attachmentSchema],
     timeline: [commentSchema],
     resolvedAt: Date,
+    // Closure fields
+    closedAt: Date,
+    closedByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
+    resolutionNotes: { type: String, maxlength: 2000 },
+    invoiceDocumentId: { type: Schema.Types.ObjectId, ref: 'Document' },
+    costAmount: { type: Number, min: 0 },
+    costCurrency: { type: String, default: 'ILS' },
   },
   {
     timestamps: true,

@@ -107,7 +107,10 @@ export const PATCH = withAuth(async (request, { user, params }) => {
   if (validation.data.description) ticket.description = validation.data.description;
   if (validation.data.priority) ticket.priority = validation.data.priority;
   if (validation.data.status) ticket.status = validation.data.status;
-  if (validation.data.vendorId) ticket.vendorId = new Types.ObjectId(validation.data.vendorId);
+  // Handle vendorId - allow null to unset
+  if ('vendorId' in body) {
+    ticket.vendorId = body.vendorId ? new Types.ObjectId(body.vendorId) : undefined;
+  }
   if (validation.data.attachments) ticket.attachments = validation.data.attachments;
 
   await ticket.save();

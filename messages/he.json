@@ -294,7 +294,32 @@
     "filterStatus": "סנן לפי סטטוס",
     "comments": "תגובות",
     "addComment": "הוסף תגובה",
-    "noComments": "אין תגובות עדיין"
+    "noComments": "אין תגובות עדיין",
+    "closeTicket": "סגירת קריאה",
+    "closeTicketDesc": "סגירת הקריאה עם תיעוד",
+    "closeAndDocument": "סגירה ותיעוד",
+    "resolutionSummary": "סיכום הטיפול",
+    "resolutionPlaceholder": "מה הייתה הבעיה? מה נעשה לתיקון?",
+    "vendorTechnician": "ספק / טכנאי",
+    "selectVendor": "בחר ספק",
+    "noVendor": "ללא ספק",
+    "cost": "עלות",
+    "costAmount": "סכום",
+    "costCurrency": "מטבע",
+    "attachInvoice": "צרף חשבונית",
+    "selectDocument": "בחר מסמך",
+    "noDocument": "ללא מסמך",
+    "notifyAfterClose": "שלח הודעה לאחר סגירה",
+    "notifyResident": "הודע לדייר",
+    "notifyBuilding": "הודע לבניין",
+    "ticketClosed": "הקריאה נסגרה בהצלחה",
+    "ticketAlreadyClosed": "הקריאה כבר סגורה",
+    "closedBy": "נסגר על ידי",
+    "closedAt": "נסגר בתאריך",
+    "resolution": "סיכום טיפול",
+    "costDetails": "פרטי עלות",
+    "attachedInvoice": "חשבונית מצורפת",
+    "sendWhatsappNotification": "שלח הודעת WhatsApp"
   },
   "vendors": {
     "title": "ספקים",
@@ -365,7 +390,8 @@
     "invoiceView": "צפייה בחשבונית",
     "invoiceDownload": "הורדת חשבונית",
     "invoicePdfDownload": "הורדת PDF חשבונית",
-    "invoiceIssued": "הנפקת חשבונית"
+    "invoiceIssued": "הנפקת חשבונית",
+    "ticketClosed": "סגירת קריאת שירות"
   },
   "settings": {
     "title": "הגדרות",

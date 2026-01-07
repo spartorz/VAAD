@@ -10,10 +10,16 @@
 - Added checkbox UI component for selection.
 - Added Hebrew translations for notifications UI.
 - Added WhatsApp reminder copy button to Billing Monthly Overview and Invoice pages.
+- Added ticket closure workflow with documentation (`POST /api/tickets/[id]/close`).
+- Added new ticket fields: `closedAt`, `closedByUserId`, `resolutionNotes`, `invoiceDocumentId`, `costAmount`, `costCurrency`.
+- Added audit action `ticket_closed` for tracking ticket closures.
+- Added close ticket dialog with resolution summary, vendor selection, cost tracking, and invoice attachment.
+- Added Hebrew translations for ticket closure UI.
 
 ### Fixed
 - WhatsApp message formatting with proper line breaks.
 - Invoice page WhatsApp button now only shows for unpaid/partial invoices.
+- Fixed Radix Select crash when empty value string was used (vendor select in ticket details).
 
 ---
 
