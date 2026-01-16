@@ -1,8 +1,8 @@
 import { NextRequest } from 'next/server';
 import { Types } from 'mongoose';
 import dbConnect from '@/lib/db';
-import { withAuth, successResponse, errorResponse } from '@/lib/api-utils';
-import { monthlyChargeWizardSchema, MonthlyChargeWizardInput } from '@/lib/validations';
+import { withAuth, successResponse, errorResponse, createAuditLog } from '@/lib/api-utils';
+import { monthlyChargeWizardSchema, MonthlyChargeWizardInput, chargeSchema } from '@/lib/validations';
 import Charge from '@/models/Charge';
 import Apartment, { IApartment } from '@/models/Apartment';
 import Building from '@/models/Building';
@@ -48,8 +48,39 @@ export const POST = withAuth(async (request: NextRequest, { user }) => {
       return errorResponse('No charges to create');
     }
 
-    // Insert charges
-    const insertedCharges = await Charge.insertMany(chargesToCreate);
+    // Validate each charge and add metadata
+    const validatedCharges = [];
+    for (const charge of chargesToCreate) {
+      const chargeValidation = chargeSchema.safeParse({
+        ...charge,
+        buildingId: user.buildingId,
+        createdBy: user.id,
+      });
+
+      if (!chargeValidation.success) {
+        console.error('Charge validation failed:', chargeValidation.error.errors, 'for charge:', charge);
+        return errorResponse(`Invalid charge data: ${chargeValidation.error.errors[0].message}`, 400);
+      }
+
+      validatedCharges.push(chargeValidation.data);
+    }
+
+    const insertedCharges = await Charge.insertMany(validatedCharges);
+
+    // Create audit logs for each charge
+    const auditPromises = insertedCharges.map(charge =>
+      createAuditLog({
+        buildingId: user.buildingId,
+        actorUserId: user.id,
+        actorName: user.name,
+        action: 'create',
+        entityType: 'charge',
+        entityId: charge._id.toString(),
+        after: charge.toObject(),
+      })
+    );
+
+    await Promise.all(auditPromises);
 
     return successResponse({
       created: insertedCharges.length,
@@ -96,7 +127,7 @@ async function calculateCharges(
             buildingId: new Types.ObjectId(buildingId),
             apartmentId: apartment._id,
             type: 'monthly_due',
-            title: data.title,
+            title: data.title || 'דמי ועד חודשיים',
             amount: data.amount,
             currency,
             period,
