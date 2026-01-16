@@ -1,8 +1,10 @@
 import { NextRequest } from 'next/server';
 import { withAuth, successResponse, errorResponse, getPaginationParams, buildSortObject, createAuditLog } from '@/lib/api-utils';
 import { residentSchema, paginationSchema } from '@/lib/validations';
-import { canManageBuilding, canAccessApartment } from '@/lib/auth';
+import { canManageBuilding, canAccessApartment, canManageFinances } from '@/lib/auth';
+import { calculateBuildingDebtStatuses } from '@/lib/balance';
 import Resident from '@/models/Resident';
+import User from '@/models/User';
 import { Types } from 'mongoose';
 
 // GET /api/residents - List residents for the building
@@ -56,8 +58,58 @@ export const GET = withAuth(async (request, { user }) => {
     Resident.countDocuments(query),
   ]);
 
+  // Get user roles for all residents
+  const residentIds = residents.map(r => r._id);
+  const users = await User.find({
+    buildingId: new Types.ObjectId(user.buildingId),
+    residentId: { $in: residentIds },
+  }).select('residentId role _id').lean();
+
+  // Create a map of residentId -> user info
+  const userMap = new Map<string, { role: string; userId: string }>();
+  users.forEach(u => {
+    if (u.residentId) {
+      userMap.set(u.residentId.toString(), {
+        role: u.role,
+        userId: u._id.toString(),
+      });
+    }
+  });
+
+  // Add role and userId to each resident
+  let residentsWithRoles = residents.map(resident => {
+    const userInfo = userMap.get(resident._id.toString());
+    return {
+      ...resident,
+      role: userInfo?.role || 'RESIDENT',
+      userId: userInfo?.userId,
+    };
+  });
+
+  // Add debt status for BOARD and TREASURER
+  if (canManageFinances(user.role)) {
+    const debtStatuses = await calculateBuildingDebtStatuses(user.buildingId);
+    
+    residentsWithRoles = residentsWithRoles.map(resident => {
+      // Handle apartmentId which can be ObjectId or populated object
+      let apartmentId: string;
+      if (typeof resident.apartmentId === 'object' && resident.apartmentId !== null) {
+        apartmentId = ('_id' in resident.apartmentId && resident.apartmentId._id)
+          ? resident.apartmentId._id.toString()
+          : resident.apartmentId.toString();
+      } else {
+        apartmentId = resident.apartmentId?.toString() || '';
+      }
+      const hasDebt = debtStatuses.get(apartmentId) || false;
+      return {
+        ...resident,
+        hasDebt,
+      };
+    });
+  }
+
   return successResponse({
-    data: residents,
+    data: residentsWithRoles,
     pagination: {
       page,
       limit,
@@ -83,10 +135,58 @@ export const POST = withAuth(async (request, { user }) => {
     return errorResponse(validation.error.errors[0].message);
   }
 
+  const apartmentId = validation.data.apartmentId;
+  
+  // Check existing active residents in this apartment (excluding pending invitations)
+  const existingResidents = await Resident.find({
+    apartmentId: new Types.ObjectId(apartmentId),
+    buildingId: new Types.ObjectId(user.buildingId),
+    isActive: true,
+    invitationStatus: { $ne: 'pending' },
+  });
+
+  const residentType = validation.data.type || 'owner';
+  let isPrimaryContact = false;
+
+  // If this is the only resident, set as primary contact
+  if (existingResidents.length === 0) {
+    isPrimaryContact = true;
+  } else {
+    // If there are multiple residents, owner should be primary contact
+    if (residentType === 'owner') {
+      // Remove primary contact from other residents
+      await Resident.updateMany(
+        {
+          apartmentId: new Types.ObjectId(apartmentId),
+          buildingId: new Types.ObjectId(user.buildingId),
+          isActive: true,
+          isPrimaryContact: true,
+        },
+        {
+          $set: { isPrimaryContact: false },
+        }
+      );
+      isPrimaryContact = true;
+    } else {
+      // If tenant and no owner is primary contact, find owner and set as primary
+      const ownerPrimaryContact = existingResidents.find(r => r.type === 'owner' && r.isPrimaryContact);
+      if (!ownerPrimaryContact) {
+        const owner = existingResidents.find(r => r.type === 'owner');
+        if (owner) {
+          await Resident.updateOne(
+            { _id: owner._id },
+            { $set: { isPrimaryContact: true } }
+          );
+        }
+      }
+    }
+  }
+
   const resident = await Resident.create({
     ...validation.data,
     buildingId: new Types.ObjectId(user.buildingId),
-    apartmentId: new Types.ObjectId(validation.data.apartmentId),
+    apartmentId: new Types.ObjectId(apartmentId),
+    isPrimaryContact,
   });
 
   await createAuditLog({

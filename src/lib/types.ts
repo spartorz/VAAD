@@ -12,6 +12,9 @@ export type ResidentType = 'owner' | 'tenant';
 // Charge Types
 export type ChargeType = 'monthly_due' | 'one_time' | 'repair' | 'fund';
 
+// Monthly Charge Types
+export type MonthlyChargeType = 'uniform' | 'by_rooms' | 'by_size' | 'by_floor';
+
 // Charge Status
 export type ChargeStatus = 'open' | 'voided';
 

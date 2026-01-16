@@ -32,9 +32,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ColumnDef } from '@tanstack/react-table';
-import { Plus, MoreHorizontal, Pencil, Upload, Loader2, Users, UserPlus, UserMinus, Calendar, History, Ban, Download, FileSpreadsheet, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Plus, MoreHorizontal, Pencil, Upload, Loader2, Users, UserPlus, UserMinus, Calendar, History, Ban, Download, FileSpreadsheet, CheckCircle, XCircle, AlertCircle, UserCheck, Mail, Phone, Star, Check, X } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { useSearchParams } from 'next/navigation';
 import { formatCurrency } from '@/lib/hooks';
@@ -44,6 +45,7 @@ interface Apartment {
   number: string;
   floor?: number;
   size?: number;
+  rooms?: number;
   status: 'active' | 'inactive';
   createdAt: string;
   balance?: number;
@@ -59,6 +61,10 @@ interface Resident {
   moveInAt?: string;
   moveOutAt?: string;
   moveOutNote?: string;
+  isPrimaryContact?: boolean;
+  invitationStatus?: 'pending' | 'accepted' | 'rejected' | null;
+  invitedBy?: string;
+  apartmentId?: string;
 }
 
 interface PaginationState {
@@ -97,6 +103,25 @@ export default function ApartmentsPage() {
   const [formLoading, setFormLoading] = useState(false);
   const [moveOutNote, setMoveOutNote] = useState('');
   const [isDeactivateOpen, setIsDeactivateOpen] = useState(false);
+  const [isAddResidentOpen, setIsAddResidentOpen] = useState(false);
+  const [isInvitationPendingOpen, setIsInvitationPendingOpen] = useState(false);
+  const [pendingInvitations, setPendingInvitations] = useState<Resident[]>([]);
+  const [inviteType, setInviteType] = useState<'existing' | 'new'>('new');
+  const [inviteForm, setInviteForm] = useState({
+    fullName: '',
+    email: '',
+    phone: '',
+    residentType: 'tenant' as 'owner' | 'tenant',
+    searchQuery: '',
+  });
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [canManageResidents, setCanManageResidents] = useState(false);
+  const [isEditResidentOpen, setIsEditResidentOpen] = useState(false);
+  const [selectedResidentForEdit, setSelectedResidentForEdit] = useState<Resident | null>(null);
+  const [isCallDialogOpen, setIsCallDialogOpen] = useState(false);
+  const [residentToCall, setResidentToCall] = useState<Resident | null>(null);
+  const [isPrimaryContactConfirmOpen, setIsPrimaryContactConfirmOpen] = useState(false);
+  const [residentForPrimaryContact, setResidentForPrimaryContact] = useState<Resident | null>(null);
 
   const fetchApartments = useCallback(async () => {
     setLoading(true);
@@ -134,6 +159,7 @@ export default function ApartmentsPage() {
       number: formData.get('number'),
       floor: formData.get('floor') ? Number(formData.get('floor')) : undefined,
       size: formData.get('size') ? Number(formData.get('size')) : undefined,
+      rooms: formData.get('rooms') ? Number(formData.get('rooms')) : undefined,
       status: formData.get('status') || 'active',
     };
 
@@ -170,6 +196,7 @@ export default function ApartmentsPage() {
       number: formData.get('number'),
       floor: formData.get('floor') ? Number(formData.get('floor')) : undefined,
       size: formData.get('size') ? Number(formData.get('size')) : undefined,
+      rooms: formData.get('rooms') ? Number(formData.get('rooms')) : undefined,
       status: formData.get('status'),
     };
 
@@ -204,8 +231,17 @@ export default function ApartmentsPage() {
       const result = await response.json();
       
       if (result.success) {
-        setActiveResidents(result.data.activeResidents || []);
+        // Sort: primary contact first, then by moveInAt
+        const sortedActive = (result.data.activeResidents || []).sort((a: Resident, b: Resident) => {
+          if (a.isPrimaryContact && !b.isPrimaryContact) return -1;
+          if (!a.isPrimaryContact && b.isPrimaryContact) return 1;
+          return new Date(b.moveInAt || 0).getTime() - new Date(a.moveInAt || 0).getTime();
+        });
+        setActiveResidents(sortedActive);
         setResidentHistory(result.data.residentHistory || []);
+        
+        // Use the permission from the server
+        setCanManageResidents(result.data.canManageResidents || false);
       } else {
         toast.error(result.error || tErrors('loadFailed'));
       }
@@ -283,6 +319,90 @@ export default function ApartmentsPage() {
     }
   };
 
+  const handleEditResident = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!selectedResidentForEdit) return;
+    setFormLoading(true);
+
+    const formData = new FormData(e.currentTarget);
+    const data = {
+      fullName: formData.get('fullName'),
+      email: formData.get('email') || undefined,
+      phone: formData.get('phone') || undefined,
+      type: formData.get('type'),
+    };
+
+    try {
+      const response = await fetch(`/api/residents/${selectedResidentForEdit._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast.success(tResidents('residentUpdated'));
+        setIsEditResidentOpen(false);
+        setSelectedResidentForEdit(null);
+        if (selectedApartment) {
+          fetchApartmentResidents(selectedApartment._id);
+        }
+      } else {
+        toast.error(result.error || tErrors('updateFailed'));
+      }
+    } catch (error) {
+      toast.error(tErrors('updateFailed'));
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleCopyEmail = async (email: string) => {
+    try {
+      await navigator.clipboard.writeText(email);
+      toast.success(t('emailCopied'));
+    } catch (error) {
+      toast.error(tErrors('generic'));
+    }
+  };
+
+  const handleCallResident = (resident: Resident) => {
+    setResidentToCall(resident);
+    setIsCallDialogOpen(true);
+  };
+
+  const confirmCall = () => {
+    if (residentToCall?.phone) {
+      window.location.href = `tel:${residentToCall.phone}`;
+    }
+    setIsCallDialogOpen(false);
+    setResidentToCall(null);
+  };
+
+  const handleSetPrimaryContact = async () => {
+    if (!residentForPrimaryContact || !selectedApartment) return;
+    try {
+      const response = await fetch(`/api/apartments/${selectedApartment._id}/residents/primary-contact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ residentId: residentForPrimaryContact._id }),
+      });
+      const result = await response.json();
+      if (result.success) {
+        toast.success(t('primaryContact') + ' ' + tCommon('success'));
+        fetchApartmentResidents(selectedApartment._id);
+      } else {
+        toast.error(result.error || tErrors('generic'));
+      }
+    } catch (error) {
+      toast.error(tErrors('generic'));
+    } finally {
+      setIsPrimaryContactConfirmOpen(false);
+      setResidentForPrimaryContact(null);
+    }
+  };
+
   const openResidentsPanel = (apartment: Apartment) => {
     setSelectedApartment(apartment);
     setIsResidentsOpen(true);
@@ -317,10 +437,34 @@ export default function ApartmentsPage() {
     }
   };
 
+  // Custom sorting function for apartment numbers (handles numeric sorting)
+  const apartmentNumberSort = (rowA: any, rowB: any) => {
+    const numA = rowA.original.number;
+    const numB = rowB.original.number;
+    
+    // Extract numeric parts for comparison
+    const extractNumeric = (str: string) => {
+      const match = str.match(/\d+/);
+      return match ? parseInt(match[0], 10) : 0;
+    };
+    
+    const numAValue = extractNumeric(numA);
+    const numBValue = extractNumeric(numB);
+    
+    if (numAValue !== numBValue) {
+      return numAValue - numBValue;
+    }
+    
+    // If numeric parts are equal, compare as strings
+    return numA.localeCompare(numB, 'he', { numeric: true });
+  };
+
   const columns: ColumnDef<Apartment>[] = [
     {
       accessorKey: 'number',
       header: t('apartmentNumber'),
+      enableSorting: true,
+      sortingFn: apartmentNumberSort,
       cell: ({ row }) => (
         <span className="font-medium">{t('apt')} {row.original.number}</span>
       ),
@@ -328,16 +472,40 @@ export default function ApartmentsPage() {
     {
       accessorKey: 'floor',
       header: t('floor'),
+      enableSorting: true,
       cell: ({ row }) => row.original.floor || '-',
+      sortingFn: (rowA: any, rowB: any) => {
+        const floorA = rowA.original.floor ?? 0;
+        const floorB = rowB.original.floor ?? 0;
+        return floorA - floorB;
+      },
     },
     {
       accessorKey: 'size',
       header: t('size'),
+      enableSorting: true,
       cell: ({ row }) => row.original.size || '-',
+      sortingFn: (rowA: any, rowB: any) => {
+        const sizeA = rowA.original.size ?? 0;
+        const sizeB = rowB.original.size ?? 0;
+        return sizeA - sizeB;
+      },
+    },
+    {
+      accessorKey: 'rooms',
+      header: t('rooms'),
+      enableSorting: true,
+      cell: ({ row }) => row.original.rooms || '-',
+      sortingFn: (rowA: any, rowB: any) => {
+        const roomsA = rowA.original.rooms ?? 0;
+        const roomsB = rowB.original.rooms ?? 0;
+        return roomsA - roomsB;
+      },
     },
     {
       accessorKey: 'status',
       header: tCommon('status'),
+      enableSorting: true,
       cell: ({ row }) => (
         <Badge variant={row.original.status === 'active' ? 'default' : 'secondary'}>
           {row.original.status === 'active' ? t('active') : t('inactive')}
@@ -449,6 +617,10 @@ export default function ApartmentsPage() {
                         <Label htmlFor="size">{t('size')}</Label>
                         <Input id="size" name="size" type="number" placeholder="לדוגמה: 80" />
                       </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="rooms">{t('rooms')}</Label>
+                        <Input id="rooms" name="rooms" type="number" placeholder="לדוגמה: 3" />
+                      </div>
                     </div>
                     <div className="grid gap-2">
                       <Label htmlFor="status">{tCommon('status')}</Label>
@@ -486,6 +658,7 @@ export default function ApartmentsPage() {
           pagination={pagination}
           onPageChange={(page) => setPagination((p) => ({ ...p, page }))}
           searchPlaceholder="Search apartments..."
+          defaultSorting={[{ id: 'number', desc: false }]}
         />
 
         {/* Edit Dialog */}
@@ -527,6 +700,15 @@ export default function ApartmentsPage() {
                       defaultValue={selectedApartment?.size}
                     />
                   </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-rooms">{t('rooms')}</Label>
+                    <Input
+                      id="edit-rooms"
+                      name="rooms"
+                      type="number"
+                      defaultValue={selectedApartment?.rooms}
+                    />
+                  </div>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="edit-status">{tCommon('status')}</Label>
@@ -566,7 +748,7 @@ export default function ApartmentsPage() {
             setResidentHistory([]);
           }
         }}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogContent className="max-w-6xl max-h-[80vh] overflow-hidden flex flex-col">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5" />
@@ -596,15 +778,64 @@ export default function ApartmentsPage() {
                 ) : (
                   <div className="space-y-3 py-2">
                     {activeResidents.map((resident) => (
-                      <Card key={resident._id}>
+                      <Card key={resident._id} className={resident.isPrimaryContact ? 'border-primary' : ''}>
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between">
-                            <div>
-                              <p className="font-medium">{resident.fullName}</p>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium">{resident.fullName}</p>
+                                {resident.isPrimaryContact && (
+                                  <Badge variant="default" className="text-xs">
+                                    {t('primaryContact')}
+                                  </Badge>
+                                )}
+                                {resident.invitationStatus === 'pending' && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    {t('invitationPending')}
+                                  </Badge>
+                                )}
+                                {resident.invitationStatus === 'rejected' && (
+                                  <Badge variant="destructive" className="text-xs">
+                                    {t('invitationRejected')}
+                                  </Badge>
+                                )}
+                              </div>
                               <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
                                 <Badge variant="outline">{resident.type === 'owner' ? tResidents('owner') : tResidents('tenant')}</Badge>
-                                {resident.email && <span dir="ltr">{resident.email}</span>}
-                                {resident.phone && <span dir="ltr">{resident.phone}</span>}
+                                <TooltipProvider>
+                                  {resident.email && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCopyEmail(resident.email!)}
+                                          className="text-muted-foreground hover:text-foreground transition-colors"
+                                        >
+                                          <Mail className="h-4 w-4" />
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>{resident.email}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                  {resident.phone && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCallResident(resident)}
+                                          className="text-muted-foreground hover:text-foreground transition-colors"
+                                        >
+                                          <Phone className="h-4 w-4" />
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>{resident.phone}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                </TooltipProvider>
                               </div>
                               {resident.moveInAt && (
                                 <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
@@ -613,17 +844,75 @@ export default function ApartmentsPage() {
                                 </p>
                               )}
                             </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedResident(resident);
-                                setIsMoveOutOpen(true);
-                              }}
-                            >
-                              <UserMinus className="ms-1 h-4 w-4" />
-                              {tResidents('moveOut')}
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (!canManageResidents || resident.isPrimaryContact) return;
+                                        setResidentForPrimaryContact(resident);
+                                        setIsPrimaryContactConfirmOpen(true);
+                                      }}
+                                      disabled={!canManageResidents || resident.isPrimaryContact || resident.invitationStatus === 'pending'}
+                                      className={`p-2 rounded-md transition-colors ${
+                                        resident.isPrimaryContact
+                                          ? 'text-yellow-500 hover:text-yellow-600'
+                                          : 'text-muted-foreground hover:text-foreground'
+                                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                    >
+                                      {resident.isPrimaryContact ? (
+                                        <Star className="h-5 w-5 fill-current" />
+                                      ) : (
+                                        <Star className="h-5 w-5" />
+                                      )}
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>{resident.isPrimaryContact ? t('primaryContact') : t('setPrimaryContactTooltip')}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                                {canManageResidents && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedResidentForEdit(resident);
+                                          setIsEditResidentOpen(true);
+                                        }}
+                                        className="p-2 rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                                      >
+                                        <Pencil className="h-5 w-5" />
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>{t('editResident')}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                )}
+                                {canManageResidents && (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedResident(resident);
+                                          setIsMoveOutOpen(true);
+                                        }}
+                                        className="p-2 rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                                      >
+                                        <UserMinus className="h-5 w-5" />
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>{t('removeResident')}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                )}
+                              </TooltipProvider>
+                            </div>
                           </div>
                         </CardContent>
                       </Card>
@@ -683,10 +972,18 @@ export default function ApartmentsPage() {
               <Button variant="outline" onClick={() => setIsResidentsOpen(false)}>
                 {tCommon('close')}
               </Button>
-              <Button onClick={() => setIsMoveInOpen(true)}>
-                <UserPlus className="ms-2 h-4 w-4" />
-                {tResidents('moveIn')}
-              </Button>
+              {canManageResidents && (
+                <Button onClick={() => setIsAddResidentOpen(true)}>
+                  <UserPlus className="ms-2 h-4 w-4" />
+                  {t('addResident')}
+                </Button>
+              )}
+              {!canManageResidents && (
+                <Button onClick={() => setIsMoveInOpen(true)}>
+                  <UserPlus className="ms-2 h-4 w-4" />
+                  {tResidents('moveIn')}
+                </Button>
+              )}
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -797,6 +1094,134 @@ export default function ApartmentsPage() {
           </DialogContent>
         </Dialog>
 
+        {/* Edit Resident Dialog */}
+        <Dialog open={isEditResidentOpen} onOpenChange={(open) => {
+          setIsEditResidentOpen(open);
+          if (!open) {
+            setSelectedResidentForEdit(null);
+          }
+        }}>
+          <DialogContent>
+            <form onSubmit={handleEditResident}>
+              <DialogHeader>
+                <DialogTitle>{t('editResident')}</DialogTitle>
+                <DialogDescription>
+                  {tResidents('editResidentDesc') || 'עריכת פרטי הדייר'}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-fullName">{tResidents('fullName')} *</Label>
+                  <Input 
+                    id="edit-fullName" 
+                    name="fullName" 
+                    required 
+                    defaultValue={selectedResidentForEdit?.fullName}
+                    placeholder="ישראל ישראלי" 
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-email">{tResidents('email')}</Label>
+                    <Input 
+                      id="edit-email" 
+                      name="email" 
+                      type="email" 
+                      defaultValue={selectedResidentForEdit?.email}
+                      placeholder="israel@example.com" 
+                      dir="ltr" 
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-phone">{tResidents('phone')}</Label>
+                    <Input 
+                      id="edit-phone" 
+                      name="phone" 
+                      defaultValue={selectedResidentForEdit?.phone}
+                      placeholder="050-1234567" 
+                      dir="ltr" 
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-type">{tResidents('type')}</Label>
+                  <Select name="type" defaultValue={selectedResidentForEdit?.type || 'owner'}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="owner">{tResidents('owner')}</SelectItem>
+                      <SelectItem value="tenant">{tResidents('tenant')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsEditResidentOpen(false)}>
+                  {tCommon('cancel')}
+                </Button>
+                <Button type="submit" disabled={formLoading}>
+                  {formLoading && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
+                  {tCommon('save')}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Call Resident Dialog */}
+        <Dialog open={isCallDialogOpen} onOpenChange={(open) => {
+          setIsCallDialogOpen(open);
+          if (!open) {
+            setResidentToCall(null);
+          }
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{t('callResident')}</DialogTitle>
+              <DialogDescription>
+                {residentToCall?.fullName} - {residentToCall?.phone}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-center text-lg">{t('callResident')}</p>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsCallDialogOpen(false)}>
+                {tCommon('no')}
+              </Button>
+              <Button type="button" onClick={confirmCall}>
+                {tCommon('yes')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Primary Contact Confirmation Dialog */}
+        <Dialog open={isPrimaryContactConfirmOpen} onOpenChange={(open) => {
+          setIsPrimaryContactConfirmOpen(open);
+          if (!open) {
+            setResidentForPrimaryContact(null);
+          }
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{t('setPrimaryContact')}</DialogTitle>
+              <DialogDescription>
+                {t('primaryContactConfirmDialog', { name: residentForPrimaryContact?.fullName || '' })}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsPrimaryContactConfirmOpen(false)}>
+                {tCommon('cancel')}
+              </Button>
+              <Button type="button" onClick={handleSetPrimaryContact}>
+                {tCommon('confirm')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Deactivate Confirmation Dialog */}
         <Dialog open={isDeactivateOpen} onOpenChange={(open) => {
           setIsDeactivateOpen(open);
@@ -839,6 +1264,213 @@ export default function ApartmentsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Add Resident Dialog */}
+        <Dialog open={isAddResidentOpen} onOpenChange={setIsAddResidentOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{t('addResident')}</DialogTitle>
+              <DialogDescription>
+                {t('manageResidents')}
+              </DialogDescription>
+            </DialogHeader>
+            <Tabs value={inviteType} onValueChange={(v) => setInviteType(v as 'existing' | 'new')}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="new">{t('inviteNewUser')}</TabsTrigger>
+                <TabsTrigger value="existing">{t('inviteExistingUser')}</TabsTrigger>
+              </TabsList>
+              <TabsContent value="new" className="space-y-4">
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!selectedApartment) return;
+                  setFormLoading(true);
+                  try {
+                    const response = await fetch(`/api/apartments/${selectedApartment._id}/residents/invite`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        type: 'new',
+                        fullName: inviteForm.fullName,
+                        email: inviteForm.email || undefined,
+                        phone: inviteForm.phone || undefined,
+                        residentType: inviteForm.residentType,
+                      }),
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                      toast.success(t('invitationSent'));
+                      setIsAddResidentOpen(false);
+                      setInviteForm({ fullName: '', email: '', phone: '', residentType: 'tenant', searchQuery: '' });
+                      fetchApartmentResidents(selectedApartment._id);
+                    } else {
+                      toast.error(result.error || tErrors('generic'));
+                    }
+                  } catch (error) {
+                    toast.error(tErrors('generic'));
+                  } finally {
+                    setFormLoading(false);
+                  }
+                }}>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="invite-name">{tResidents('fullName')} *</Label>
+                      <Input
+                        id="invite-name"
+                        value={inviteForm.fullName}
+                        onChange={(e) => setInviteForm({ ...inviteForm, fullName: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="invite-email">{tResidents('email')}</Label>
+                        <Input
+                          id="invite-email"
+                          type="email"
+                          value={inviteForm.email}
+                          onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                          dir="ltr"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="invite-phone">{tResidents('phone')}</Label>
+                        <Input
+                          id="invite-phone"
+                          value={inviteForm.phone}
+                          onChange={(e) => setInviteForm({ ...inviteForm, phone: e.target.value })}
+                          dir="ltr"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="invite-type">{tResidents('type')}</Label>
+                      <Select value={inviteForm.residentType} onValueChange={(v: 'owner' | 'tenant') => setInviteForm({ ...inviteForm, residentType: v })}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="owner">{tResidents('owner')}</SelectItem>
+                          <SelectItem value="tenant">{tResidents('tenant')}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsAddResidentOpen(false)}>
+                      {tCommon('cancel')}
+                    </Button>
+                    <Button type="submit" disabled={formLoading || !inviteForm.fullName || (!inviteForm.email && !inviteForm.phone)}>
+                      {formLoading && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
+                      {t('inviteResident')}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </TabsContent>
+              <TabsContent value="existing" className="space-y-4">
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="search-user">{t('searchUser')}</Label>
+                    <Input
+                      id="search-user"
+                      value={inviteForm.searchQuery}
+                      onChange={(e) => setInviteForm({ ...inviteForm, searchQuery: e.target.value })}
+                      placeholder={t('searchUser')}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={async () => {
+                      // Search for users - this would need a search API endpoint
+                      toast.info('חיפוש משתמשים - תכונה זו תפותח בקרוב');
+                    }}
+                  >
+                    {t('searchUser')}
+                  </Button>
+                  <p className="text-sm text-muted-foreground">
+                    {t('inviteExistingUser')} - תכונה זו תפותח בקרוב
+                  </p>
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setIsAddResidentOpen(false)}>
+                    {tCommon('cancel')}
+                  </Button>
+                </DialogFooter>
+              </TabsContent>
+            </Tabs>
+          </DialogContent>
+        </Dialog>
+
+        {/* Invitation Pending Dialog */}
+        <Dialog open={isInvitationPendingOpen} onOpenChange={setIsInvitationPendingOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{t('invitationAcceptTitle')}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              {pendingInvitations.map((invitation) => (
+                <div key={invitation._id} className="rounded-lg border p-4">
+                  <p className="mb-2">{t('invitationAcceptMessage').replace('{apartment}', invitation.apartmentId || '')}</p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="default"
+                      onClick={async () => {
+                        try {
+                          const response = await fetch(`/api/residents/${invitation._id}/invitation`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'accept' }),
+                          });
+                          const result = await response.json();
+                          if (result.success) {
+                            toast.success(t('invitationAccepted'));
+                            setPendingInvitations(pendingInvitations.filter(i => i._id !== invitation._id));
+                            if (pendingInvitations.length === 1) {
+                              setIsInvitationPendingOpen(false);
+                            }
+                          } else {
+                            toast.error(result.error || tErrors('generic'));
+                          }
+                        } catch (error) {
+                          toast.error(tErrors('generic'));
+                        }
+                      }}
+                    >
+                      <Check className="ms-2 h-4 w-4" />
+                      {t('accept')}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={async () => {
+                        try {
+                          const response = await fetch(`/api/residents/${invitation._id}/invitation`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'reject' }),
+                          });
+                          const result = await response.json();
+                          if (result.success) {
+                            toast.success(t('invitationRejectedMsg'));
+                            setPendingInvitations(pendingInvitations.filter(i => i._id !== invitation._id));
+                            if (pendingInvitations.length === 1) {
+                              setIsInvitationPendingOpen(false);
+                            }
+                          } else {
+                            toast.error(result.error || tErrors('generic'));
+                          }
+                        } catch (error) {
+                          toast.error(tErrors('generic'));
+                        }
+                      }}
+                    >
+                      <X className="ms-2 h-4 w-4" />
+                      {t('reject')}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
@@ -858,6 +1490,7 @@ interface ImportResult {
     apartmentNumber: string;
     floor: number | null;
     sizeSqft: number | null;
+    rooms: number | null;
     status: string;
     notes: string;
     action: 'create' | 'update' | 'skip';
@@ -1150,6 +1783,7 @@ function ImportDialog({
                           <th className="px-3 py-2 text-start">{t('apartmentNumber')}</th>
                           <th className="px-3 py-2 text-start">{t('floor')}</th>
                           <th className="px-3 py-2 text-start">{t('size')}</th>
+                          <th className="px-3 py-2 text-start">{t('rooms')}</th>
                           <th className="px-3 py-2 text-start">{tCommon('status')}</th>
                         </tr>
                       </thead>
@@ -1165,6 +1799,7 @@ function ImportDialog({
                             <td className="px-3 py-2 font-medium">{row.apartmentNumber}</td>
                             <td className="px-3 py-2">{row.floor ?? '-'}</td>
                             <td className="px-3 py-2">{row.sizeSqft ?? '-'}</td>
+                            <td className="px-3 py-2">{row.rooms ?? '-'}</td>
                             <td className="px-3 py-2">
                               <Badge variant={row.status === 'active' ? 'default' : 'secondary'}>
                                 {row.status}

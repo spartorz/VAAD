@@ -214,6 +214,177 @@ export async function getApartmentStatement(
   return entries;
 }
 
+// Calculate debt status for a single apartment
+// Returns true if apartment has debt, false otherwise
+export async function calculateApartmentDebtStatus(
+  buildingId: string,
+  apartmentId: string
+): Promise<boolean> {
+  const buildingObjId = new Types.ObjectId(buildingId);
+  const apartmentObjId = new Types.ObjectId(apartmentId);
+
+  // Get current month in YYYY-MM format
+  const now = new Date();
+  const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  // Check for monthly charge for current month
+  const monthlyCharge = await Charge.findOne({
+    buildingId: buildingObjId,
+    apartmentId: apartmentObjId,
+    type: 'monthly_due',
+    period: currentPeriod,
+    status: 'open',
+  }).lean();
+
+  // Calculate date range for current month
+  const [year, month] = currentPeriod.split('-').map(Number);
+  const startOfMonth = new Date(year, month - 1, 1);
+  const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999);
+
+  // Get payments for current month
+  const paymentsResult = await Payment.aggregate([
+    {
+      $match: {
+        buildingId: buildingObjId,
+        apartmentId: apartmentObjId,
+        status: 'confirmed',
+        paidAt: {
+          $gte: startOfMonth,
+          $lte: endOfMonth,
+        },
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        total: { $sum: '$amount' },
+      },
+    },
+  ]);
+
+  const monthlyChargeAmount = monthlyCharge?.amount || 0;
+  const paidThisMonth = paymentsResult[0]?.total || 0;
+
+  // Check if monthly charge is not fully paid
+  if (monthlyChargeAmount > paidThisMonth) {
+    return true; // Has debt
+  }
+
+  // Check for special charges (non-monthly_due or monthly_due with different period)
+  const specialChargesResult = await Charge.aggregate([
+    {
+      $match: {
+        buildingId: buildingObjId,
+        apartmentId: apartmentObjId,
+        status: 'open',
+        $or: [
+          { type: { $ne: 'monthly_due' } },
+          { type: 'monthly_due', period: { $ne: currentPeriod } },
+        ],
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        total: { $sum: '$amount' },
+      },
+    },
+  ]);
+
+  const specialChargesAmount = specialChargesResult[0]?.total || 0;
+
+  // If there are special charges, apartment has debt
+  if (specialChargesAmount > 0) {
+    return true; // Has debt
+  }
+
+  return false; // No debt
+}
+
+// Calculate debt statuses for all apartments in a building
+export async function calculateBuildingDebtStatuses(
+  buildingId: string
+): Promise<Map<string, boolean>> {
+  const buildingObjId = new Types.ObjectId(buildingId);
+
+  // Get current month in YYYY-MM format
+  const now = new Date();
+  const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  // Calculate date range for current month
+  const [year, month] = currentPeriod.split('-').map(Number);
+  const startOfMonth = new Date(year, month - 1, 1);
+  const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999);
+
+  // Get all monthly charges for current month
+  const monthlyCharges = await Charge.find({
+    buildingId: buildingObjId,
+    type: 'monthly_due',
+    period: currentPeriod,
+    status: 'open',
+  }).lean();
+
+  // Get all payments for current month
+  const payments = await Payment.find({
+    buildingId: buildingObjId,
+    status: 'confirmed',
+    paidAt: {
+      $gte: startOfMonth,
+      $lte: endOfMonth,
+    },
+  }).lean();
+
+  // Get all special charges (non-monthly_due or monthly_due with different period)
+  const specialCharges = await Charge.find({
+    buildingId: buildingObjId,
+    status: 'open',
+    $or: [
+      { type: { $ne: 'monthly_due' } },
+      { type: 'monthly_due', period: { $ne: currentPeriod } },
+    ],
+  }).lean();
+
+  // Create maps for efficient lookup
+  const monthlyChargesMap = new Map(
+    monthlyCharges.map((c) => [c.apartmentId.toString(), c.amount])
+  );
+
+  const paymentsMap = new Map<string, number>();
+  for (const payment of payments) {
+    const aptId = payment.apartmentId.toString();
+    const current = paymentsMap.get(aptId) || 0;
+    paymentsMap.set(aptId, current + payment.amount);
+  }
+
+  const specialChargesMap = new Map<string, number>();
+  for (const charge of specialCharges) {
+    const aptId = charge.apartmentId.toString();
+    const current = specialChargesMap.get(aptId) || 0;
+    specialChargesMap.set(aptId, current + charge.amount);
+  }
+
+  // Get all unique apartment IDs
+  const allApartmentIds = new Set([
+    ...monthlyChargesMap.keys(),
+    ...paymentsMap.keys(),
+    ...specialChargesMap.keys(),
+  ]);
+
+  // Calculate debt status for each apartment
+  const debtStatuses = new Map<string, boolean>();
+  for (const apartmentId of allApartmentIds) {
+    const monthlyChargeAmount = monthlyChargesMap.get(apartmentId) || 0;
+    const paidThisMonth = paymentsMap.get(apartmentId) || 0;
+    const specialChargesAmount = specialChargesMap.get(apartmentId) || 0;
+
+    // Has debt if monthly charge not fully paid or has special charges
+    const hasDebt = monthlyChargeAmount > paidThisMonth || specialChargesAmount > 0;
+    debtStatuses.set(apartmentId, hasDebt);
+  }
+
+  return debtStatuses;
+}
+
 // Get building-wide totals
 export async function getBuildingTotals(buildingId: string) {
   const buildingObjId = new Types.ObjectId(buildingId);

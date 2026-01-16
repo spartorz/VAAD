@@ -7,9 +7,32 @@ import { Types } from 'mongoose';
 
 // POST /api/residents/[id]/move-out - Move out a resident
 export const POST = withAuth(async (request, { user, params }) => {
-  // Only BOARD/MANAGEMENT can move out residents
+  // Check permissions
   if (!canManageBuilding(user.role)) {
-    return errorResponse('Permission denied', 403);
+    // For residents, check if they are removing themselves or a resident they invited
+    if (user.role === 'RESIDENT') {
+      const residentId = params?.id;
+      if (!residentId || !Types.ObjectId.isValid(residentId)) {
+        return errorResponse('Invalid resident ID');
+      }
+
+      // Allow removing self
+      if (user.residentId === residentId) {
+        // OK - resident can remove themselves
+      } else {
+        // Check if resident invited this person
+        const resident = await Resident.findOne({
+          _id: new Types.ObjectId(residentId),
+          buildingId: new Types.ObjectId(user.buildingId),
+        });
+
+        if (!resident || resident.invitedBy?.toString() !== user.id) {
+          return errorResponse('You can only remove residents you invited or yourself.', 403);
+        }
+      }
+    } else {
+      return errorResponse('Permission denied', 403);
+    }
   }
 
   const id = params?.id;
@@ -51,6 +74,27 @@ export const POST = withAuth(async (request, { user, params }) => {
   }
 
   await resident.save();
+
+  // If this resident was primary contact, set another resident as primary contact
+  if (before.isPrimaryContact) {
+    const remainingResidents = await Resident.find({
+      apartmentId: resident.apartmentId,
+      buildingId: new Types.ObjectId(user.buildingId),
+      isActive: true,
+      _id: { $ne: resident._id },
+    });
+
+    if (remainingResidents.length > 0) {
+      // Prefer owner as primary contact
+      const owner = remainingResidents.find(r => r.type === 'owner');
+      const newPrimaryContact = owner || remainingResidents[0];
+      
+      if (newPrimaryContact) {
+        newPrimaryContact.isPrimaryContact = true;
+        await newPrimaryContact.save();
+      }
+    }
+  }
 
   // Disable associated user account if exists
   const linkedUser = await User.findOne({

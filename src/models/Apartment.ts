@@ -7,6 +7,7 @@ export interface IApartment extends Document {
   number: string;
   floor?: number;
   size?: number;
+  rooms?: number;
   status: ApartmentStatus;
   createdAt: Date;
   updatedAt: Date;
@@ -18,6 +19,7 @@ const apartmentSchema = new Schema<IApartment>(
     number: { type: String, required: true, trim: true },
     floor: { type: Number },
     size: { type: Number },
+    rooms: { type: Number },
     status: { type: String, enum: ['active', 'inactive'], default: 'active' },
   },
   {

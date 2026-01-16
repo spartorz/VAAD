@@ -169,3 +169,71 @@ export function canViewAuditLog(role: UserRole): boolean {
   return ['ADMIN', 'BOARD', 'MANAGEMENT'].includes(role);
 }
 
+export function canChangeRole(
+  currentUserRole: UserRole,
+  targetUserRole: UserRole,
+  newRole: UserRole,
+  isChangingSelf: boolean,
+  isOnlyBoardMember: boolean
+): boolean {
+  // ADMIN and MANAGEMENT can change any role to any role
+  if (['ADMIN', 'MANAGEMENT'].includes(currentUserRole)) {
+    return true;
+  }
+
+  // BOARD permissions
+  if (currentUserRole === 'BOARD') {
+    // If changing self and is only board member, cannot change
+    if (isChangingSelf && isOnlyBoardMember) {
+      return false;
+    }
+
+    // Can change RESIDENT to TREASURER or BOARD
+    if (targetUserRole === 'RESIDENT' && ['TREASURER', 'BOARD'].includes(newRole)) {
+      return true;
+    }
+
+    // Can change TREASURER to RESIDENT or BOARD
+    if (targetUserRole === 'TREASURER' && ['RESIDENT', 'BOARD'].includes(newRole)) {
+      return true;
+    }
+
+    // Can change self to TREASURER or RESIDENT (if not only board member)
+    if (isChangingSelf && ['TREASURER', 'RESIDENT'].includes(newRole)) {
+      return !isOnlyBoardMember;
+    }
+  }
+
+  // TREASURER and RESIDENT cannot change roles
+  return false;
+}
+
+export async function canManageApartmentResidents(user: SessionUser, apartmentId: string): Promise<boolean> {
+  // Admin, Board, and Management can always manage residents
+  if (['ADMIN', 'BOARD', 'MANAGEMENT'].includes(user.role)) {
+    return true;
+  }
+
+  // For residents, check if they are an owner of this apartment
+  if (user.role === 'RESIDENT' && user.residentId) {
+    await dbConnect();
+    const { Types } = await import('mongoose');
+    
+    if (!Types.ObjectId.isValid(user.residentId) || !Types.ObjectId.isValid(apartmentId)) {
+      return false;
+    }
+
+    const resident = await Resident.findOne({
+      _id: new Types.ObjectId(user.residentId),
+      apartmentId: new Types.ObjectId(apartmentId),
+      buildingId: new Types.ObjectId(user.buildingId),
+      isActive: true,
+    });
+
+    if (resident && resident.type === 'owner') {
+      return true;
+    }
+  }
+
+  return false;
+}

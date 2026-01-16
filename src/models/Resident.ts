@@ -13,6 +13,12 @@ export interface IResident extends Document {
   moveInAt: Date;
   moveOutAt?: Date | null;
   moveOutNote?: string;
+  isPrimaryContact?: boolean;
+  invitationStatus?: 'pending' | 'accepted' | 'rejected' | null;
+  invitedBy?: Types.ObjectId;
+  invitedAt?: Date;
+  rejectedAt?: Date;
+  invitationToken?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -29,6 +35,12 @@ const residentSchema = new Schema<IResident>(
     moveInAt: { type: Date, default: Date.now },
     moveOutAt: { type: Date, default: null },
     moveOutNote: { type: String, trim: true },
+    isPrimaryContact: { type: Boolean, default: false },
+    invitationStatus: { type: String, enum: ['pending', 'accepted', 'rejected'], default: null },
+    invitedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    invitedAt: { type: Date },
+    rejectedAt: { type: Date },
+    invitationToken: { type: String, trim: true, unique: true, sparse: true },
   },
   {
     timestamps: true,
@@ -41,6 +53,8 @@ residentSchema.index({ buildingId: 1, email: 1 });
 residentSchema.index({ buildingId: 1, isActive: 1 });
 residentSchema.index({ buildingId: 1, moveInAt: -1 });
 residentSchema.index({ buildingId: 1, apartmentId: 1, isActive: 1 });
+residentSchema.index({ apartmentId: 1, isPrimaryContact: 1 });
+residentSchema.index({ invitationToken: 1 });
 
 const Resident: Model<IResident> = mongoose.models.Resident || mongoose.model<IResident>('Resident', residentSchema);
 

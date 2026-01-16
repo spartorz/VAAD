@@ -29,9 +29,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ColumnDef } from '@tanstack/react-table';
-import { Plus, Loader2, DollarSign, Calendar, XCircle, ChevronLeft, ChevronRight, Building2, CheckCircle2, Clock, AlertCircle, FileText, Download, MessageCircle } from 'lucide-react';
+import { Plus, Loader2, DollarSign, Calendar, XCircle, ChevronLeft, ChevronRight, Building2, CheckCircle2, Clock, AlertCircle, FileText, Download, MessageCircle, Edit } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatCurrency, formatDate } from '@/lib/hooks';
+import { MonthlyChargeWizard } from '@/components/monthly-charge-wizard';
+import { MonthlyChargeWizardInput } from '@/lib/validations';
 
 // Helper hook for billing translations
 function useBillingTranslations() {
@@ -80,9 +82,11 @@ export default function BillingPage() {
   const t = useTranslations('billing');
   const isResident = session?.user?.role === 'RESIDENT';
   const defaultTab = searchParams.get('tab') || (isResident ? 'charges' : 'monthly');
-  
+
   const [apartments, setApartments] = useState<Apartment[]>([]);
   const [activeTab, setActiveTab] = useState(defaultTab);
+  const [isMonthlyWizardOpen, setIsMonthlyWizardOpen] = useState(false);
+  const [currency, setCurrency] = useState<string>('ILS');
 
   useEffect(() => {
     async function fetchApartments() {
@@ -96,6 +100,27 @@ export default function BillingPage() {
       fetchApartments();
     }
   }, [isResident]);
+
+  const handleMonthlyChargesSubmit = async (data: MonthlyChargeWizardInput) => {
+    try {
+      const response = await fetch('/api/charges/monthly/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...data, buildingId: session?.user?.buildingId }),
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        toast.success(t('monthlyChargeCreated'));
+        // Trigger a refresh of the charges data
+        window.location.reload();
+      } else {
+        toast.error(result.error || t('monthlyChargeError'));
+      }
+    } catch (error) {
+      toast.error(t('monthlyChargeError'));
+    }
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -118,7 +143,13 @@ export default function BillingPage() {
           )}
 
           <TabsContent value="charges">
-            <ChargesTab apartments={apartments} isResident={isResident} />
+            <ChargesTab
+              apartments={apartments}
+              isResident={isResident}
+              onMonthlyWizardOpen={() => setIsMonthlyWizardOpen(true)}
+              currency={currency}
+              setCurrency={setCurrency}
+            />
           </TabsContent>
 
           <TabsContent value="payments">
@@ -138,18 +169,42 @@ export default function BillingPage() {
           )}
         </Tabs>
       </div>
+
+      <MonthlyChargeWizard
+        open={isMonthlyWizardOpen}
+        onOpenChange={setIsMonthlyWizardOpen}
+        onSubmit={handleMonthlyChargesSubmit}
+        buildingId={session?.user?.buildingId || ''}
+        currency={currency}
+      />
     </div>
   );
 }
 
-function ChargesTab({ apartments, isResident }: { apartments: Apartment[]; isResident: boolean }) {
+function ChargesTab({
+  apartments,
+  isResident,
+  onMonthlyWizardOpen,
+  currency,
+  setCurrency
+}: {
+  apartments: Apartment[];
+  isResident: boolean;
+  onMonthlyWizardOpen: () => void;
+  currency: string;
+  setCurrency: (currency: string) => void;
+}) {
   const router = useRouter();
+  const { data: session } = useSession();
   const { t, tCommon, tApartments, tSuccess, tErrors } = useBillingTranslations();
   const [charges, setCharges] = useState<Charge[]>([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 });
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
+  const [editMonthlyDue, setEditMonthlyDue] = useState(false);
+  const [monthlyDueValue, setMonthlyDueValue] = useState<number | ''>('');
+  const [savingMonthlyDue, setSavingMonthlyDue] = useState(false);
 
   const fetchCharges = useCallback(async () => {
     setLoading(true);
@@ -173,9 +228,23 @@ function ChargesTab({ apartments, isResident }: { apartments: Apartment[]; isRes
     }
   }, [pagination.page, pagination.limit, tErrors]);
 
+  const fetchBuildingData = useCallback(async () => {
+    try {
+      const response = await fetch('/api/building');
+      const result = await response.json();
+      if (result.success) {
+        setMonthlyDueValue(result.data.settings?.monthlyDueAmount || '');
+        setCurrency(result.data.settings?.currency || 'ILS');
+      }
+    } catch (error) {
+      console.error('Failed to fetch building data:', error);
+    }
+  }, []);
+
   useEffect(() => {
     fetchCharges();
-  }, [fetchCharges]);
+    fetchBuildingData();
+  }, [fetchCharges, fetchBuildingData]);
 
   const handleVoid = async (chargeId: string) => {
     try {
@@ -239,6 +308,39 @@ function ChargesTab({ apartments, isResident }: { apartments: Apartment[]; isRes
       'voided': t('voided'),
     };
     return statusMap[status] || status;
+  };
+
+  const userRole = session?.user?.role;
+  const canEditMonthlyDue = ['ADMIN', 'BOARD', 'MANAGEMENT', 'TREASURER'].includes(userRole || '');
+
+  const handleSaveMonthlyDue = async () => {
+    if (!canEditMonthlyDue || !monthlyDueValue || monthlyDueValue < 0) return;
+    setSavingMonthlyDue(true);
+    
+    try {
+      const response = await fetch('/api/building', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          settings: {
+            monthlyDueAmount: monthlyDueValue,
+          },
+        }),
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        toast.success(tSuccess('saved'));
+        setEditMonthlyDue(false);
+        fetchBuildingData();
+      } else {
+        toast.error(result.error || tErrors('saveFailed'));
+      }
+    } catch (error) {
+      toast.error(tErrors('saveFailed'));
+    } finally {
+      setSavingMonthlyDue(false);
+    }
   };
 
   const columns: ColumnDef<Charge>[] = [
@@ -315,8 +417,89 @@ function ChargesTab({ apartments, isResident }: { apartments: Apartment[]; isRes
     }] : []),
   ];
 
+  const getCurrencySymbol = (curr: string) => {
+    switch (curr) {
+      case 'ILS': return '₪';
+      case 'USD': return '$';
+      case 'EUR': return '€';
+      default: return curr;
+    }
+  };
+
   return (
     <div className="space-y-4">
+      {/* Monthly Due Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-xl">{t('monthlyDueTitle')}</CardTitle>
+              <CardDescription>{t('monthlyDueDescription')}</CardDescription>
+            </div>
+            {!editMonthlyDue && canEditMonthlyDue && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onMonthlyWizardOpen}
+              >
+                <Calendar className="h-4 w-4 ms-2" />
+                הגדרות חיוב
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {editMonthlyDue ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <div className="relative flex-1">
+                  <span className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                    {getCurrencySymbol(currency)}
+                  </span>
+                  <Input
+                    type="number"
+                    className="pe-10"
+                    value={monthlyDueValue}
+                    onChange={(e) => setMonthlyDueValue(e.target.value ? parseFloat(e.target.value) : '')}
+                    placeholder="0.00"
+                    disabled={savingMonthlyDue}
+                    dir="ltr"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleSaveMonthlyDue}
+                  disabled={savingMonthlyDue || !monthlyDueValue || monthlyDueValue < 0}
+                >
+                  {savingMonthlyDue && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
+                  {tCommon('save')}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setEditMonthlyDue(false);
+                    fetchBuildingData();
+                  }}
+                  disabled={savingMonthlyDue}
+                >
+                  {tCommon('cancel')}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center">
+              <p className="text-4xl font-bold text-primary">
+                {formatCurrency(monthlyDueValue || 0, currency)}
+              </p>
+              <p className="text-sm text-muted-foreground mt-2">
+                {t('monthlyAmountHelp')}
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {!isResident && (
         <div className="flex justify-end">
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>

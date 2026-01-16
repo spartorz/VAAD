@@ -35,8 +35,21 @@ export const GET = withAuth(async (request, { user, params }) => {
 
 // PATCH /api/residents/[id] - Update resident
 export const PATCH = withAuth(async (request, { user, params }) => {
+  // Check permissions
   if (!canManageBuilding(user.role)) {
-    return errorResponse('Permission denied', 403);
+    // For residents, check if they invited this resident
+    if (user.role === 'RESIDENT') {
+      const resident = await Resident.findOne({
+        _id: new Types.ObjectId(params?.id || ''),
+        buildingId: new Types.ObjectId(user.buildingId),
+      });
+
+      if (!resident || resident.invitedBy?.toString() !== user.id) {
+        return errorResponse('You can only edit residents you invited.', 403);
+      }
+    } else {
+      return errorResponse('Permission denied', 403);
+    }
   }
 
   const id = params?.id;

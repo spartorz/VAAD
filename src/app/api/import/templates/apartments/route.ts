@@ -30,6 +30,7 @@ export async function GET() {
       { header: 'apartmentNumber', key: 'apartmentNumber', width: 18 },
       { header: 'floor', key: 'floor', width: 10 },
       { header: 'sizeSqft', key: 'sizeSqft', width: 12 },
+      { header: 'rooms', key: 'rooms', width: 10 },
       { header: 'status', key: 'status', width: 12 },
       { header: 'notes', key: 'notes', width: 30 },
     ];
@@ -49,6 +50,7 @@ export async function GET() {
       apartmentNumber: '101',
       floor: 1,
       sizeSqft: 85,
+      rooms: 3,
       status: 'active',
       notes: 'Example apartment',
     });
@@ -56,6 +58,7 @@ export async function GET() {
       apartmentNumber: '102',
       floor: 1,
       sizeSqft: 90,
+      rooms: 4,
       status: 'active',
       notes: '',
     });
@@ -84,6 +87,7 @@ export async function GET() {
       { column: 'apartmentNumber', required: 'Yes', description: 'Unique apartment number/identifier', example: '101, A-12, 3B' },
       { column: 'floor', required: 'Yes', description: 'Floor number (integer)', example: '1, 2, -1 (basement)' },
       { column: 'sizeSqft', required: 'No', description: 'Size in square feet/meters', example: '85, 120' },
+      { column: 'rooms', required: 'No', description: 'Number of rooms', example: '3, 4' },
       { column: 'status', required: 'No', description: 'active or inactive (default: active)', example: 'active' },
       { column: 'notes', required: 'No', description: 'Additional notes', example: 'Corner unit' },
     ]);

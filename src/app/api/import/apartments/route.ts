@@ -17,6 +17,7 @@ interface PreviewRow {
   apartmentNumber: string;
   floor: number | null;
   sizeSqft: number | null;
+  rooms: number | null;
   status: string;
   notes: string;
   action: 'create' | 'update' | 'skip';
@@ -134,6 +135,7 @@ export async function POST(request: NextRequest) {
       const apartmentNumber = String(apartmentNumberCell.value).trim();
       const floorCell = headers['floor'] ? row.getCell(headers['floor']) : null;
       const sizeCell = headers['sizesqft'] || headers['size'] ? row.getCell(headers['sizesqft'] || headers['size']) : null;
+      const roomsCell = headers['rooms'] ? row.getCell(headers['rooms']) : null;
       const statusCell = headers['status'] ? row.getCell(headers['status']) : null;
       const notesCell = headers['notes'] ? row.getCell(headers['notes']) : null;
 
@@ -161,6 +163,16 @@ export async function POST(request: NextRequest) {
         sizeSqft = Number(sizeCell.value);
         if (isNaN(sizeSqft)) {
           errors.push({ row: rowNum, sheet: 'apartments', field: 'sizeSqft', message: 'Size must be a number' });
+          hasError = true;
+        }
+      }
+
+      // Parse rooms
+      let rooms: number | null = null;
+      if (roomsCell?.value !== null && roomsCell?.value !== undefined && roomsCell?.value !== '') {
+        rooms = Number(roomsCell.value);
+        if (isNaN(rooms)) {
+          errors.push({ row: rowNum, sheet: 'apartments', field: 'rooms', message: 'Rooms must be a number' });
           hasError = true;
         }
       }
@@ -201,6 +213,7 @@ export async function POST(request: NextRequest) {
             apartmentNumber,
             floor,
             sizeSqft,
+            rooms,
             status,
             notes,
             action: 'update',
@@ -211,6 +224,7 @@ export async function POST(request: NextRequest) {
             apartmentNumber,
             floor,
             sizeSqft,
+            rooms,
             status,
             notes,
             action: 'skip',
@@ -224,12 +238,14 @@ export async function POST(request: NextRequest) {
           number: apartmentNumber,
           floor: floor ?? undefined,
           size: sizeSqft ?? undefined,
+          rooms: rooms ?? undefined,
           status,
         });
         preview.push({
           apartmentNumber,
           floor,
           sizeSqft,
+          rooms,
           status,
           notes,
           action: 'create',

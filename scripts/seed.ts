@@ -234,12 +234,12 @@ async function seed() {
     console.log(`✅ Created ${residents.length} residents\n`);
 
     // Create users
-    // NOTE: Seed uses inline schemas WITHOUT pre-save hook, so we hash here directly
+    // NOTE: Need to bypass pre-save hook, so we use direct insert
     console.log('👤 Creating users...');
     const passwordHash = await bcrypt.hash('demo123', 12);
 
     // Board member
-    const boardUser = await User.create({
+    const boardUser = new User({
       buildingId: building._id,
       name: 'Board Admin',
       email: 'board@demo.com',
@@ -247,9 +247,10 @@ async function seed() {
       role: 'BOARD',
       isActive: true,
     });
+    await boardUser.save({ validateBeforeSave: false });
 
     // Treasurer
-    const treasurerUser = await User.create({
+    const treasurerUser = new User({
       buildingId: building._id,
       name: 'Treasurer User',
       email: 'treasurer@demo.com',
@@ -257,9 +258,10 @@ async function seed() {
       role: 'TREASURER',
       isActive: true,
     });
+    await treasurerUser.save({ validateBeforeSave: false });
 
     // Resident user (linked to first resident)
-    const residentUser = await User.create({
+    const residentUser = new User({
       buildingId: building._id,
       residentId: residents[0]._id,
       name: residents[0].fullName,
@@ -268,6 +270,7 @@ async function seed() {
       role: 'RESIDENT',
       isActive: true,
     });
+    await residentUser.save({ validateBeforeSave: false });
 
     console.log('✅ Created users:');
     console.log('   - board@demo.com (BOARD)');

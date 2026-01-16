@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslations } from 'next-intl';
+import { useSession } from 'next-auth/react';
 import { Header } from '@/components/layout/header';
 import { DataTable } from '@/components/data-table';
 import { Button } from '@/components/ui/button';
@@ -31,7 +32,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ColumnDef } from '@tanstack/react-table';
-import { Plus, MoreHorizontal, Pencil, Loader2, Mail, Phone, UserMinus, Calendar, Home, Upload, Download, AlertTriangle, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
+import { Plus, MoreHorizontal, Pencil, Loader2, Mail, Phone, UserMinus, Calendar, Home, Upload, Download, AlertTriangle, CheckCircle, AlertCircle, XCircle, UserCog, Circle, Star, Eye, EyeOff } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -53,6 +55,10 @@ interface Resident {
   moveOutNote?: string;
   apartmentId: Apartment;
   createdAt: string;
+  role?: string;
+  userId?: string;
+  hasDebt?: boolean;
+  isPrimaryContact?: boolean;
 }
 
 interface PaginationState {
@@ -99,9 +105,11 @@ interface ImportResult {
 
 export default function ResidentsPage() {
   const t = useTranslations('residents');
+  const tRoles = useTranslations('roles');
   const tApartments = useTranslations('apartments');
   const tCommon = useTranslations('common');
   const tErrors = useTranslations('errors');
+  const { data: session } = useSession();
   const [residents, setResidents] = useState<Resident[]>([]);
   const [apartments, setApartments] = useState<Apartment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -116,9 +124,21 @@ export default function ResidentsPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isMoveOutOpen, setIsMoveOutOpen] = useState(false);
+  const [isRoleChangeOpen, setIsRoleChangeOpen] = useState(false);
+  const [isCreateUserOpen, setIsCreateUserOpen] = useState(false);
   const [selectedResident, setSelectedResident] = useState<Resident | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [moveOutNote, setMoveOutNote] = useState('');
+  const [newRole, setNewRole] = useState<string>('');
+  const [createUserForm, setCreateUserForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+  });
+  const [showPhoneNumbers, setShowPhoneNumbers] = useState(false);
+  const [isCallDialogOpen, setIsCallDialogOpen] = useState(false);
+  const [residentToCall, setResidentToCall] = useState<Resident | null>(null);
   
   // Import state
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -405,42 +425,136 @@ export default function ResidentsPage() {
     }
   };
 
+  const handleCopyEmail = (email: string) => {
+    navigator.clipboard.writeText(email);
+    toast.success(tApartments('emailCopied'));
+  };
+
+  const handleCallResident = (resident: Resident) => {
+    setResidentToCall(resident);
+    setIsCallDialogOpen(true);
+  };
+
+  const confirmCall = () => {
+    if (residentToCall?.phone) {
+      window.location.href = `tel:${residentToCall.phone}`;
+    }
+    setIsCallDialogOpen(false);
+    setResidentToCall(null);
+  };
+
   const columns: ColumnDef<Resident>[] = [
     {
       accessorKey: 'fullName',
       header: t('fullName'),
+      enableSorting: false,
       cell: ({ row }) => (
-        <div>
+        <div className="flex items-center gap-2">
           <p className="font-medium">{row.original.fullName}</p>
+          {row.original.isPrimaryContact && (
+            <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
+          )}
           {row.original.email && (
-            <p className="text-xs text-muted-foreground flex items-center gap-1" dir="ltr">
-              <Mail className="h-3 w-3" />
-              {row.original.email}
-            </p>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyEmail(row.original.email!)}
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Mail className="h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{row.original.email}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
         </div>
       ),
     },
     {
-      accessorKey: 'apartmentId',
-      header: t('apartment'),
-      cell: ({ row }) => (
-        <span>{tApartments('apt')} {row.original.apartmentId?.number || '-'}</span>
+      accessorKey: 'phone',
+      header: () => (
+        <div className="flex items-center gap-2">
+          <span>{t('phone')}</span>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => setShowPhoneNumbers(!showPhoneNumbers)}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showPhoneNumbers ? (
+                    <Eye className="h-4 w-4" />
+                  ) : (
+                    <EyeOff className="h-4 w-4" />
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>הצג את כל מספרי הטלפון בטבלה</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
       ),
+      enableSorting: false,
+      cell: ({ row }) => {
+        if (!row.original.phone) return '-';
+        
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => handleCallResident(row.original)}
+                  className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+                  dir="ltr"
+                >
+                  <Phone className="h-3 w-3" />
+                  {showPhoneNumbers && <span>{row.original.phone}</span>}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{row.original.phone}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      },
     },
     {
-      accessorKey: 'phone',
-      header: t('phone'),
-      cell: ({ row }) => row.original.phone ? (
-        <span className="flex items-center gap-1" dir="ltr">
-          <Phone className="h-3 w-3 text-muted-foreground" />
-          {row.original.phone}
-        </span>
-      ) : '-',
+      accessorFn: (row) => row.apartmentId?.number || '',
+      header: tApartments('apt'),
+      enableSorting: true,
+      sortingFn: (rowA, rowB) => {
+        const a = rowA.original.apartmentId?.number || '';
+        const b = rowB.original.apartmentId?.number || '';
+
+        // Try to parse as numbers for proper numeric sorting
+        const aNum = parseInt(a);
+        const bNum = parseInt(b);
+
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+          return aNum - bNum;
+        }
+
+        // Fallback to string comparison
+        return a.localeCompare(b);
+      },
+      cell: ({ row }) => (
+        <span>{row.original.apartmentId?.number || '-'}</span>
+      ),
     },
     {
       accessorKey: 'type',
       header: t('type'),
+      enableSorting: true,
       cell: ({ row }) => (
         <Badge variant="outline">
           {row.original.type === 'owner' ? t('owner') : t('tenant')}
@@ -450,6 +564,7 @@ export default function ResidentsPage() {
     {
       accessorKey: 'isActive',
       header: tCommon('status'),
+      enableSorting: true,
       cell: ({ row }) => (
         <div className="flex flex-col gap-1">
           <Badge variant={row.original.isActive ? 'default' : 'secondary'}>
@@ -463,6 +578,47 @@ export default function ResidentsPage() {
           )}
         </div>
       ),
+    },
+    ...(session?.user?.role === 'BOARD' || session?.user?.role === 'TREASURER' ? [{
+      accessorKey: 'hasDebt',
+      header: t('debt'),
+      enableSorting: false,
+      cell: ({ row }: { row: any }) => (
+        <div className="flex items-center justify-center">
+          {row.original.hasDebt ? (
+            <Circle className="h-3 w-3 fill-red-500" />
+          ) : (
+            <Circle className="h-3 w-3 fill-green-500" />
+          )}
+        </div>
+      ),
+    }] : []),
+    {
+      accessorKey: 'role',
+      header: t('role'),
+      enableSorting: true,
+      cell: ({ row }) => {
+        const resident = row.original;
+        const role = resident.role || 'RESIDENT';
+        const userRole = session?.user?.role;
+        const canChange = ['ADMIN', 'BOARD', 'MANAGEMENT'].includes(userRole || '');
+
+        return (
+          <div
+            className={canChange ? 'cursor-pointer hover:opacity-80' : ''}
+            onClick={() => {
+              if (canChange) {
+                setSelectedResident(resident);
+                setIsRoleChangeOpen(true);
+              }
+            }}
+          >
+            <Badge variant="outline" className="font-medium">
+              {tRoles(role as any)}
+            </Badge>
+          </div>
+        );
+      },
     },
     {
       id: 'actions',
@@ -961,6 +1117,265 @@ export default function ResidentsPage() {
               >
                 {formLoading && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
                 {tCommon('confirm')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Role Change Dialog */}
+        <Dialog open={isRoleChangeOpen} onOpenChange={(open) => {
+          setIsRoleChangeOpen(open);
+          if (!open) {
+            setSelectedResident(null);
+            setNewRole('');
+          }
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{t('changeRole')}</DialogTitle>
+              <DialogDescription>
+                {selectedResident?.fullName}
+              </DialogDescription>
+            </DialogHeader>
+            {selectedResident && (
+              <>
+                {!selectedResident.userId ? (
+                  <div className="space-y-4 py-4">
+                    <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-4">
+                      <p className="text-sm text-yellow-800">
+                        {t('noUserCannotAssignRole')}
+                      </p>
+                    </div>
+                    <Button
+                      onClick={() => {
+                        setIsRoleChangeOpen(false);
+                        setIsCreateUserOpen(true);
+                      }}
+                      className="w-full"
+                    >
+                      <UserCog className="ms-2 h-4 w-4" />
+                      {t('createUser')}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4 py-4">
+                    <div className="grid gap-2">
+                      <Label>{t('role')}</Label>
+                      <Select value={newRole || selectedResident.role} onValueChange={setNewRole}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="RESIDENT">{tRoles('RESIDENT')}</SelectItem>
+                          <SelectItem value="TREASURER">{tRoles('TREASURER')}</SelectItem>
+                          <SelectItem value="BOARD">{tRoles('BOARD')}</SelectItem>
+                          {session?.user?.role === 'ADMIN' || session?.user?.role === 'MANAGEMENT' ? (
+                            <>
+                              <SelectItem value="MANAGEMENT">{tRoles('MANAGEMENT')}</SelectItem>
+                              <SelectItem value="ADMIN">{tRoles('ADMIN')}</SelectItem>
+                            </>
+                          ) : null}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {newRole && newRole !== selectedResident.role && (
+                      <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
+                        <p className="text-sm text-blue-800">
+                          {t('roleChangeConfirm')
+                            .replace('{oldRole}', tRoles(selectedResident.role as any))
+                            .replace('{newRole}', tRoles(newRole as any))}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsRoleChangeOpen(false)}>
+                {tCommon('cancel')}
+              </Button>
+              {selectedResident?.userId && newRole && newRole !== selectedResident.role && (
+                <Button
+                  type="button"
+                  onClick={async () => {
+                    if (!selectedResident) return;
+                    setFormLoading(true);
+                    try {
+                      const response = await fetch(`/api/residents/${selectedResident._id}/role`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ newRole }),
+                      });
+
+                      const result = await response.json();
+
+                      if (result.success) {
+                        toast.success(t('roleChanged'));
+                        setIsRoleChangeOpen(false);
+                        setSelectedResident(null);
+                        setNewRole('');
+                        fetchResidents();
+                      } else {
+                        toast.error(result.error || t('roleChangeFailed'));
+                      }
+                    } catch (error) {
+                      toast.error(t('roleChangeFailed'));
+                    } finally {
+                      setFormLoading(false);
+                    }
+                  }}
+                  disabled={formLoading}
+                >
+                  {formLoading && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
+                  {tCommon('confirm')}
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Create User Dialog */}
+        <Dialog open={isCreateUserOpen} onOpenChange={(open) => {
+          setIsCreateUserOpen(open);
+          if (!open) {
+            setCreateUserForm({
+              name: '',
+              email: '',
+              password: '',
+              confirmPassword: '',
+            });
+          }
+        }}>
+          <DialogContent>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (!selectedResident) return;
+              setFormLoading(true);
+
+              try {
+                const response = await fetch(`/api/residents/${selectedResident._id}/user`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(createUserForm),
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                  toast.success(t('userCreated'));
+                  setIsCreateUserOpen(false);
+                  setCreateUserForm({
+                    name: '',
+                    email: '',
+                    password: '',
+                    confirmPassword: '',
+                  });
+                  // Refresh residents to get the new user info
+                  await fetchResidents();
+                  // Open role change dialog
+                  setIsRoleChangeOpen(true);
+                } else {
+                  toast.error(result.error || tErrors('createFailed'));
+                }
+              } catch (error) {
+                toast.error(tErrors('createFailed'));
+              } finally {
+                setFormLoading(false);
+              }
+            }}>
+              <DialogHeader>
+                <DialogTitle>{t('createUserForResident')}</DialogTitle>
+                <DialogDescription>
+                  {t('createUserDesc')}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="user-name">{t('userName')} *</Label>
+                  <Input
+                    id="user-name"
+                    required
+                    value={createUserForm.name}
+                    onChange={(e) => setCreateUserForm({ ...createUserForm, name: e.target.value })}
+                    placeholder={selectedResident?.fullName}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="user-email">{t('userEmail')} *</Label>
+                  <Input
+                    id="user-email"
+                    type="email"
+                    required
+                    value={createUserForm.email}
+                    onChange={(e) => setCreateUserForm({ ...createUserForm, email: e.target.value })}
+                    dir="ltr"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="user-password">{t('password')} *</Label>
+                  <Input
+                    id="user-password"
+                    type="password"
+                    required
+                    value={createUserForm.password}
+                    onChange={(e) => setCreateUserForm({ ...createUserForm, password: e.target.value })}
+                    minLength={6}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="user-confirm-password">{t('confirmPassword')} *</Label>
+                  <Input
+                    id="user-confirm-password"
+                    type="password"
+                    required
+                    value={createUserForm.confirmPassword}
+                    onChange={(e) => setCreateUserForm({ ...createUserForm, confirmPassword: e.target.value })}
+                  />
+                  {createUserForm.password && createUserForm.confirmPassword && createUserForm.password !== createUserForm.confirmPassword && (
+                    <p className="text-xs text-red-600">{t('passwordsDoNotMatch')}</p>
+                  )}
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsCreateUserOpen(false)}>
+                  {tCommon('cancel')}
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={formLoading || createUserForm.password !== createUserForm.confirmPassword}
+                >
+                  {formLoading && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
+                  {tCommon('add')}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Call Resident Dialog */}
+        <Dialog open={isCallDialogOpen} onOpenChange={(open) => {
+          setIsCallDialogOpen(open);
+          if (!open) {
+            setResidentToCall(null);
+          }
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{tApartments('callResident')}</DialogTitle>
+              <DialogDescription>
+                {residentToCall?.fullName} - {residentToCall?.phone}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <p className="text-center text-lg">{tApartments('callResident')}</p>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsCallDialogOpen(false)}>
+                {tCommon('no')}
+              </Button>
+              <Button type="button" onClick={confirmCall}>
+                {tCommon('yes')}
               </Button>
             </DialogFooter>
           </DialogContent>
