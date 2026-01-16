@@ -69,127 +69,162 @@ async function calculateCharges(
   buildingId: string
 ): Promise<any[]> {
   const charges: any[] = [];
-  const dueDate = new Date(data.startPeriod + '-01');
 
-  // Set due date to the dueDay of the month
-  dueDate.setDate(data.dueDay || 10);
+  // Generate periods from startPeriod to endPeriod (or just startPeriod if no endPeriod)
+  const periods = [];
+  const startDate = new Date(data.startPeriod + '-01');
+  const endDate = data.endPeriod ? new Date(data.endPeriod + '-01') : startDate;
+
+  let currentDate = new Date(startDate);
+  while (currentDate <= endDate) {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth() + 1;
+    const period = `${year}-${String(month).padStart(2, '0')}`;
+    periods.push(period);
+    currentDate.setMonth(currentDate.getMonth() + 1);
+  }
 
   switch (data.type) {
     case 'uniform':
-      // Same amount for all apartments
-      for (const apartment of apartments) {
-        charges.push({
-          buildingId: new Types.ObjectId(buildingId),
-          apartmentId: apartment._id,
-          type: 'monthly_due',
-          title: data.title,
-          amount: data.amount,
-          currency,
-          period: data.startPeriod,
-          dueDate,
-          status: 'open',
-        });
-      }
-      break;
+      // Same amount for all apartments for each period
+      for (const period of periods) {
+        const dueDate = new Date(period + '-01');
+        dueDate.setDate(data.dueDay || 10);
 
-    case 'by_rooms':
-      // Amount based on number of rooms
-      for (const apartment of apartments) {
-        const config = data.roomConfigs?.find((c) => c.rooms === apartment.rooms);
-        if (config) {
+        for (const apartment of apartments) {
           charges.push({
             buildingId: new Types.ObjectId(buildingId),
             apartmentId: apartment._id,
             type: 'monthly_due',
-            title: config.title || `${config.rooms} חדרים`,
-            amount: config.amount,
+            title: data.title,
+            amount: data.amount,
             currency,
-            period: data.startPeriod,
+            period,
             dueDate,
             status: 'open',
           });
+        }
+      }
+      break;
+
+    case 'by_rooms':
+      // Amount based on number of rooms for each period
+      for (const period of periods) {
+        const dueDate = new Date(period + '-01');
+        dueDate.setDate(data.dueDay || 10);
+
+        for (const apartment of apartments) {
+          const config = data.roomConfigs?.find((c) => c.rooms === apartment.rooms);
+          if (config) {
+            charges.push({
+              buildingId: new Types.ObjectId(buildingId),
+              apartmentId: apartment._id,
+              type: 'monthly_due',
+              title: config.title || `${config.rooms} חדרים`,
+              amount: config.amount,
+              currency,
+              period,
+              dueDate,
+              status: 'open',
+            });
+          }
         }
       }
       break;
 
     case 'by_size':
-      // Amount based on apartment size
-      for (const apartment of apartments) {
-        let amount = 0;
+      // Amount based on apartment size for each period
+      for (const period of periods) {
+        const dueDate = new Date(period + '-01');
+        dueDate.setDate(data.dueDay || 10);
 
-        if (data.calculationType === 'percentage' && apartment.size) {
-          // Calculate based on percentage of base amount
-          const totalSize = apartments.reduce((sum, apt) => sum + (apt.size || 0), 0);
-          if (totalSize > 0) {
-            const percentage = (apartment.size / totalSize) * 100;
-            amount = (data.baseAmount * percentage) / 100;
-          }
-        } else if (data.calculationType === 'manual' && data.sizeConfigs) {
-          // Find matching size configuration
-          const config = data.sizeConfigs.find((c) =>
-            apartment.size && apartment.size >= c.minSize && apartment.size <= c.maxSize
-          );
-          if (config) {
-            amount = config.amount;
-          }
-        }
+        for (const apartment of apartments) {
+          let amount = 0;
 
-        if (amount > 0) {
-          charges.push({
-            buildingId: new Types.ObjectId(buildingId),
-            apartmentId: apartment._id,
-            type: 'monthly_due',
-            title: `חיוב לפי שטח - ${apartment.size}m²`,
-            amount: Math.round(amount * 100) / 100, // Round to 2 decimal places
-            currency,
-            period: data.startPeriod,
-            dueDate,
-            status: 'open',
-          });
+          if (data.calculationType === 'percentage' && apartment.size) {
+            // Calculate based on percentage of base amount
+            const totalSize = apartments.reduce((sum, apt) => sum + (apt.size || 0), 0);
+            if (totalSize > 0) {
+              const percentage = (apartment.size / totalSize) * 100;
+              amount = (data.baseAmount * percentage) / 100;
+            }
+          } else if (data.calculationType === 'manual' && data.sizeConfigs) {
+            // Find matching size configuration
+            const config = data.sizeConfigs.find((c) =>
+              apartment.size && apartment.size >= c.minSize && apartment.size <= c.maxSize
+            );
+            if (config) {
+              amount = config.amount;
+            }
+          }
+
+          if (amount > 0) {
+            charges.push({
+              buildingId: new Types.ObjectId(buildingId),
+              apartmentId: apartment._id,
+              type: 'monthly_due',
+              title: `חיוב לפי שטח - ${apartment.size}m²`,
+              amount: Math.round(amount * 100) / 100, // Round to 2 decimal places
+              currency,
+              period,
+              dueDate,
+              status: 'open',
+            });
+          }
         }
       }
       break;
 
     case 'by_floor':
-      // Amount based on floor range
-      for (const apartment of apartments) {
-        const config = data.floorConfigs?.find((c) =>
-          apartment.floor !== undefined &&
-          apartment.floor >= c.minFloor &&
-          apartment.floor <= c.maxFloor
-        );
+      // Amount based on floor range for each period
+      for (const period of periods) {
+        const dueDate = new Date(period + '-01');
+        dueDate.setDate(data.dueDay || 10);
 
-        if (config) {
-          charges.push({
-            buildingId: new Types.ObjectId(buildingId),
-            apartmentId: apartment._id,
-            type: 'monthly_due',
-            title: config.title || `קומה ${config.minFloor}-${config.maxFloor}`,
-            amount: config.amount,
-            currency,
-            period: data.startPeriod,
-            dueDate,
-            status: 'open',
-          });
+        for (const apartment of apartments) {
+          const config = data.floorConfigs?.find((c) =>
+            apartment.floor !== undefined &&
+            apartment.floor >= c.minFloor &&
+            apartment.floor <= c.maxFloor
+          );
+
+          if (config) {
+            charges.push({
+              buildingId: new Types.ObjectId(buildingId),
+              apartmentId: apartment._id,
+              type: 'monthly_due',
+              title: config.title || `קומה ${config.minFloor}-${config.maxFloor}`,
+              amount: config.amount,
+              currency,
+              period,
+              dueDate,
+              status: 'open',
+            });
+          }
         }
       }
       break;
 
     case 'manual':
-      // Manual configuration - specific amounts for specific apartments
+      // Manual configuration - specific amounts for specific apartments for each period
       if ((data as any).manualConfigs) {
-        for (const config of (data as any).manualConfigs) {
-          charges.push({
-            buildingId: new Types.ObjectId(buildingId),
-            apartmentId: new Types.ObjectId(config.apartmentId),
-            type: 'monthly_due',
-            title: config.title || 'דמי ועד חודשיים',
-            amount: config.amount,
-            currency,
-            period: data.startPeriod,
-            dueDate,
-            status: 'open',
-          });
+        for (const period of periods) {
+          const dueDate = new Date(period + '-01');
+          dueDate.setDate(data.dueDay || 10);
+
+          for (const config of (data as any).manualConfigs) {
+            charges.push({
+              buildingId: new Types.ObjectId(buildingId),
+              apartmentId: new Types.ObjectId(config.apartmentId),
+              type: 'monthly_due',
+              title: config.title || 'דמי ועד חודשיים',
+              amount: config.amount,
+              currency,
+              period,
+              dueDate,
+              status: 'open',
+            });
+          }
         }
       }
       break;

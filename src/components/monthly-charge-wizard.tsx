@@ -27,6 +27,7 @@ import {
   RoomsBasedMonthlyChargeInput,
   SizeBasedMonthlyChargeInput,
   FloorBasedMonthlyChargeInput,
+  ManualMonthlyChargeInput,
 } from '@/lib/validations';
 
 interface MonthlyChargeWizardProps {
@@ -308,120 +309,185 @@ export function MonthlyChargeWizard({
     const currentMonth = currentDate.getMonth(); // 0-11
     const currentYear = currentDate.getFullYear();
 
-    // יצירת רשימת חודשים - 12 חודשים מהחודש הנוכחי
+    // יצירת רשימת חודשים - 24 חודשים מהחודש הנוכחי
     const months = [];
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 24; i++) {
       const date = new Date(currentYear, currentMonth + i, 1);
       const year = date.getFullYear();
       const month = date.getMonth();
       const monthYearString = `${year}-${String(month + 1).padStart(2, '0')}`;
-      const monthName = date.toLocaleDateString('he-IL', { year: 'numeric', month: 'long' });
+      const monthName = date.toLocaleDateString('he-IL', { month: 'long' });
+      const yearLabel = date.toLocaleDateString('he-IL', { year: 'numeric' });
 
       months.push({
         value: monthYearString,
-        label: monthName,
+        monthName,
+        yearLabel,
+        fullLabel: `${monthName} ${yearLabel}`,
         isCurrent: i === 0
       });
     }
 
-    const selectedPeriod = (state.data as any).startPeriod || months[0].value;
+    const startPeriod = (state.data as any).startPeriod || months[0].value;
+    const endPeriod = (state.data as any).endPeriod || months[11].value; // ברירת מחדל 12 חודשים
 
-    const handleMonthSelect = (monthValue: string) => {
-      updateData({ startPeriod: monthValue });
-    };
+    const handleStartMonthSelect = (monthValue: string) => {
+      const startIndex = months.findIndex(m => m.value === monthValue);
+      const endIndex = months.findIndex(m => m.value === endPeriod);
 
-    const getMonthIndex = (monthValue: string) => {
-      return months.findIndex(m => m.value === monthValue);
-    };
-
-    const navigateMonth = (direction: 'prev' | 'next') => {
-      const currentIndex = getMonthIndex(selectedPeriod);
-      let newIndex;
-
-      if (direction === 'prev') {
-        newIndex = Math.max(0, currentIndex - 1);
+      // אם החודש ההתחלה מאוחר מהחודש הסיום, הזז גם את הסיום
+      if (startIndex >= endIndex) {
+        const newEndIndex = Math.min(months.length - 1, startIndex + 11); // לפחות 12 חודשים
+        updateData({
+          startPeriod: monthValue,
+          endPeriod: months[newEndIndex].value
+        });
       } else {
-        newIndex = Math.min(months.length - 1, currentIndex + 1);
+        updateData({ startPeriod: monthValue });
       }
-
-      handleMonthSelect(months[newIndex].value);
     };
 
-    const selectedMonthIndex = getMonthIndex(selectedPeriod);
-    const visibleMonths = months.slice(
-      Math.max(0, selectedMonthIndex - 1),
-      Math.min(months.length, selectedMonthIndex + 2)
-    );
+    const handleEndMonthSelect = (monthValue: string) => {
+      const startIndex = months.findIndex(m => m.value === startPeriod);
+      const endIndex = months.findIndex(m => m.value === monthValue);
+
+      // אם החודש הסיום מוקדם מהחודש ההתחלה, הזז גם את ההתחלה
+      if (endIndex <= startIndex) {
+        const newStartIndex = Math.max(0, endIndex - 11); // לפחות 12 חודשים
+        updateData({
+          startPeriod: months[newStartIndex].value,
+          endPeriod: monthValue
+        });
+      } else {
+        updateData({ endPeriod: monthValue });
+      }
+    };
+
+    const startIndex = months.findIndex(m => m.value === startPeriod);
+    const endIndex = months.findIndex(m => m.value === endPeriod);
+
+    // חישוב החודשים שיוצגו (6 חודשים לפני ההתחלה ועד 6 חודשים אחרי הסיום)
+    const displayStart = Math.max(0, startIndex - 3);
+    const displayEnd = Math.min(months.length, endIndex + 4);
+    const displayMonths = months.slice(displayStart, displayEnd);
+
+    const getMonthStatus = (monthValue: string) => {
+      if (monthValue === startPeriod) return 'start';
+      if (monthValue === endPeriod) return 'end';
+      const monthIndex = months.findIndex(m => m.value === monthValue);
+      return (monthIndex >= startIndex && monthIndex <= endIndex) ? 'selected' : 'unselected';
+    };
 
     return (
       <div className="space-y-6">
         <div className="text-center">
-          <h3 className="text-lg font-semibold mb-2">בחר תאריך התחלה</h3>
-          <p className="text-muted-foreground">מתי להתחיל לגבות את החיובים החודשיים</p>
+          <h3 className="text-lg font-semibold mb-2">תקופת החיוב</h3>
+          <p className="text-muted-foreground">בחר את תקופת החיובים החודשיים</p>
         </div>
 
         <Card>
           <CardContent className="pt-6">
-            <div className="space-y-4">
-              <div>
-                <Label>חודש התחלה</Label>
-
-                {/* Month Carousel */}
-                <div className="mt-3">
-                  <div className="flex items-center justify-center gap-4">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => navigateMonth('prev')}
-                      disabled={selectedMonthIndex === 0}
-                      className="h-10 w-10"
-                    >
-                      <ChevronLeft className="h-5 w-5" />
-                    </Button>
-
-                    <div className="flex gap-2 min-w-[300px] justify-center">
-                      {visibleMonths.map((month, index) => {
-                        const isSelected = month.value === selectedPeriod;
-                        const isVisible = Math.abs(index - 1) <= 1; // Show max 3 months
-
-                        return (
-                          <button
-                            key={month.value}
-                            onClick={() => handleMonthSelect(month.value)}
-                            className={`px-4 py-2 rounded-lg border transition-all text-center min-w-[120px] ${
-                              isSelected
-                                ? 'bg-primary text-primary-foreground border-primary shadow-md'
-                                : 'bg-background hover:bg-muted border-border hover:border-primary/20'
-                            } ${!isVisible ? 'opacity-50' : ''}`}
-                          >
-                            <div className="text-sm font-medium">
-                              {month.label}
-                            </div>
-                            {month.isCurrent && (
-                              <div className="text-xs text-muted-foreground mt-1">
-                                (החודש הנוכחי)
-                              </div>
-                            )}
-                          </button>
-                        );
-                      })}
+            <div className="space-y-6">
+              {/* Month Range Selector */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="text-center flex-1">
+                    <Label className="text-sm font-medium text-green-700">חודש התחלה</Label>
+                    <div className="text-lg font-semibold mt-1">
+                      {months.find(m => m.value === startPeriod)?.fullLabel}
                     </div>
+                  </div>
 
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => navigateMonth('next')}
-                      disabled={selectedMonthIndex === months.length - 1}
-                      className="h-10 w-10"
-                    >
-                      <ChevronRight className="h-5 w-5" />
-                    </Button>
+                  <div className="px-4">
+                    <div className="w-8 h-0.5 bg-border"></div>
+                  </div>
+
+                  <div className="text-center flex-1">
+                    <Label className="text-sm font-medium text-red-700">חודש אחרון</Label>
+                    <div className="text-lg font-semibold mt-1">
+                      {months.find(m => m.value === endPeriod)?.fullLabel}
+                    </div>
                   </div>
                 </div>
 
-                <p className="text-sm text-muted-foreground mt-3 text-center">
-                  בחר את החודש הראשון שבו יתחילו החיובים
-                </p>
+                {/* Visual Range Indicator */}
+                <div className="flex items-center justify-center">
+                  <div className="flex items-center space-x-1 bg-muted p-3 rounded-lg">
+                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                    <div className="text-sm text-muted-foreground">התחלה</div>
+                    <div className="w-8 h-0.5 bg-primary mx-2"></div>
+                    <div className="text-sm text-muted-foreground">
+                      {endIndex - startIndex + 1} חודשים
+                    </div>
+                    <div className="w-8 h-0.5 bg-primary mx-2"></div>
+                    <div className="text-sm text-muted-foreground">סיום</div>
+                    <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Month Grid */}
+              <div className="space-y-4">
+                <Label className="text-center block">בחר חודשים</Label>
+
+                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {displayMonths.map((month) => {
+                    const status = getMonthStatus(month.value);
+
+                    return (
+                      <div key={month.value} className="space-y-2">
+                        <button
+                          onClick={() => {
+                            if (status === 'start' || status === 'selected') {
+                              handleStartMonthSelect(month.value);
+                            } else {
+                              handleEndMonthSelect(month.value);
+                            }
+                          }}
+                          className={`w-full p-3 rounded-lg border-2 transition-all text-center ${
+                            status === 'start'
+                              ? 'bg-green-500 text-white border-green-500 shadow-md'
+                              : status === 'end'
+                              ? 'bg-red-500 text-white border-red-500 shadow-md'
+                              : status === 'selected'
+                              ? 'bg-blue-100 border-blue-300 text-blue-800'
+                              : 'bg-white border-gray-200 hover:border-primary hover:bg-primary/5'
+                          }`}
+                        >
+                          <div className="text-sm font-medium">{month.monthName}</div>
+                          <div className="text-xs opacity-75">{month.yearLabel}</div>
+                        </button>
+
+                        {status === 'start' && (
+                          <div className="text-xs text-center text-green-600 font-medium">התחלה</div>
+                        )}
+                        {status === 'end' && (
+                          <div className="text-xs text-center text-red-600 font-medium">סיום</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="text-center space-y-2">
+                  <div className="flex justify-center space-x-4 text-sm">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                      <span>חודש התחלה</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 bg-blue-100 rounded-full border border-blue-300"></div>
+                      <span>חודשים נבחרים</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                      <span>חודש אחרון</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    לחץ על חודש כדי להגדיר אותו כחודש התחלה או סיום
+                  </p>
+                </div>
               </div>
             </div>
           </CardContent>

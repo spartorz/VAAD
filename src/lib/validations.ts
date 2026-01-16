@@ -132,7 +132,7 @@ export const generateChargesSchema = z.object({
 });
 
 // Monthly Charge Wizard Schemas
-export const monthlyChargeTypeSchema = z.enum(['uniform', 'by_rooms', 'by_size', 'by_floor']);
+export const monthlyChargeTypeSchema = z.enum(['uniform', 'by_rooms', 'by_size', 'by_floor', 'manual']);
 
 export const uniformMonthlyChargeSchema = z.object({
   type: z.literal('uniform'),
@@ -140,7 +140,9 @@ export const uniformMonthlyChargeSchema = z.object({
   currency: z.string().default('ILS'),
   dueDay: z.number().min(1).max(28).default(10),
   startPeriod: z.string().regex(/^\d{4}-\d{2}$/, 'Period must be YYYY-MM format'),
+  endPeriod: z.string().regex(/^\d{4}-\d{2}$/, 'Period must be YYYY-MM format').optional(),
   title: z.string().min(1, 'Title is required').max(200).default('דמי ועד חודשיים'),
+  description: z.string().optional(),
 });
 
 export const roomsBasedMonthlyChargeSchema = z.object({
@@ -153,6 +155,7 @@ export const roomsBasedMonthlyChargeSchema = z.object({
   currency: z.string().default('ILS'),
   dueDay: z.number().min(1).max(28).default(10),
   startPeriod: z.string().regex(/^\d{4}-\d{2}$/, 'Period must be YYYY-MM format'),
+  endPeriod: z.string().regex(/^\d{4}-\d{2}$/, 'Period must be YYYY-MM format').optional(),
   title: z.string().min(1, 'Title is required').max(200).default('דמי ועד חודשיים לפי חדרים'),
 });
 
@@ -170,6 +173,7 @@ export const sizeBasedMonthlyChargeSchema = z.object({
   currency: z.string().default('ILS'),
   dueDay: z.number().min(1).max(28).default(10),
   startPeriod: z.string().regex(/^\d{4}-\d{2}$/, 'Period must be YYYY-MM format'),
+  endPeriod: z.string().regex(/^\d{4}-\d{2}$/, 'Period must be YYYY-MM format').optional(),
   title: z.string().min(1, 'Title is required').max(200).default('דמי ועד חודשיים לפי שטח'),
 });
 
@@ -184,7 +188,22 @@ export const floorBasedMonthlyChargeSchema = z.object({
   currency: z.string().default('ILS'),
   dueDay: z.number().min(1).max(28).default(10),
   startPeriod: z.string().regex(/^\d{4}-\d{2}$/, 'Period must be YYYY-MM format'),
+  endPeriod: z.string().regex(/^\d{4}-\d{2}$/, 'Period must be YYYY-MM format').optional(),
   title: z.string().min(1, 'Title is required').max(200).default('דמי ועד חודשיים לפי קומה'),
+});
+
+export const manualMonthlyChargeSchema = z.object({
+  type: z.literal('manual'),
+  manualConfigs: z.array(z.object({
+    apartmentId: z.string(),
+    amount: z.number().positive('Amount must be positive'),
+    title: z.string().optional(),
+  })).min(1, 'At least one apartment configuration required'),
+  currency: z.string().default('ILS'),
+  dueDay: z.number().min(1).max(28).default(10),
+  startPeriod: z.string().regex(/^\d{4}-\d{2}$/, 'Period must be YYYY-MM format'),
+  endPeriod: z.string().regex(/^\d{4}-\d{2}$/, 'Period must be YYYY-MM format').optional(),
+  title: z.string().min(1, 'Title is required').max(200).default('דמי ועד חודשיים'),
 });
 
 export const monthlyChargeWizardSchema = z.discriminatedUnion('type', [
@@ -192,6 +211,7 @@ export const monthlyChargeWizardSchema = z.discriminatedUnion('type', [
   roomsBasedMonthlyChargeSchema,
   sizeBasedMonthlyChargeSchema,
   floorBasedMonthlyChargeSchema,
+  manualMonthlyChargeSchema,
 ]);
 
 export type MonthlyChargeType = z.infer<typeof monthlyChargeTypeSchema>;
@@ -199,6 +219,7 @@ export type UniformMonthlyChargeInput = z.infer<typeof uniformMonthlyChargeSchem
 export type RoomsBasedMonthlyChargeInput = z.infer<typeof roomsBasedMonthlyChargeSchema>;
 export type SizeBasedMonthlyChargeInput = z.infer<typeof sizeBasedMonthlyChargeSchema>;
 export type FloorBasedMonthlyChargeInput = z.infer<typeof floorBasedMonthlyChargeSchema>;
+export type ManualMonthlyChargeInput = z.infer<typeof manualMonthlyChargeSchema>;
 export type MonthlyChargeWizardInput = z.infer<typeof monthlyChargeWizardSchema>;
 
 // Payment Validation
