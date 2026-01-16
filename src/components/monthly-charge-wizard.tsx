@@ -457,14 +457,13 @@ export function MonthlyChargeWizard({
                           {month.isCurrent && (
                             <div className="text-xs text-yellow-600 font-semibold">החודש</div>
                           )}
+                          {status === 'start' && (
+                            <div className="text-xs text-white font-semibold">התחלה</div>
+                          )}
+                          {status === 'end' && (
+                            <div className="text-xs text-white font-semibold">סיום</div>
+                          )}
                         </button>
-
-                        {status === 'start' && (
-                          <div className="text-xs text-center text-green-600 font-medium">התחלה</div>
-                        )}
-                        {status === 'end' && (
-                          <div className="text-xs text-center text-red-600 font-medium">סיום</div>
-                        )}
                       </div>
                     );
                   })}
@@ -501,56 +500,102 @@ export function MonthlyChargeWizard({
     );
   };
 
-  const renderSummaryStep = () => (
-    <div className="space-y-6">
-      <div className="text-center">
-        <h3 className="text-lg font-semibold mb-2">סיכום ההגדרות</h3>
-        <p className="text-muted-foreground">אנא בדוק את הפרטים לפני האישור</p>
+  const renderSummaryStep = () => {
+    const startPeriod = (state.data as any).startPeriod;
+    const endPeriod = (state.data as any).endPeriod;
+
+    // Calculate number of months
+    let monthsCount = 0;
+    if (startPeriod && endPeriod) {
+      const currentYear = new Date().getFullYear();
+      const startMonth = months.findIndex(m => m.value === startPeriod);
+      const endMonth = months.findIndex(m => m.value === endPeriod);
+      monthsCount = endMonth - startMonth + 1;
+    }
+
+    return (
+      <div className="space-y-6">
+        <div className="text-center">
+          <h3 className="text-lg font-semibold mb-2">סיכום ההגדרות</h3>
+          <p className="text-muted-foreground">אנא בדוק את הפרטים לפני האישור</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Period Summary */}
+          <Card className="border-2 border-primary/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Calendar className="h-5 w-5 text-primary" />
+                תקופת החיוב
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+                <span className="text-sm font-medium text-green-700">חודש התחלה</span>
+                <span className="font-semibold text-green-800">
+                  {startPeriod ? months.find(m => m.value === startPeriod)?.monthName : '-'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg">
+                <span className="text-sm font-medium text-red-700">חודש סיום</span>
+                <span className="font-semibold text-red-800">
+                  {endPeriod ? months.find(m => m.value === endPeriod)?.monthName : '-'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <span className="text-sm font-medium text-blue-700">מספר חודשים</span>
+                <span className="font-semibold text-blue-800">
+                  {monthsCount > 0 ? `${monthsCount} חודשים` : '-'}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Charge Details */}
+          <Card className="border-2 border-primary/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <DollarSign className="h-5 w-5 text-primary" />
+                פרטי החיוב
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                <span className="text-sm font-medium text-gray-700">סוג חיוב</span>
+                <p className="mt-1 font-semibold text-gray-800">
+                  {state.chargeType === 'uniform' && 'חיוב זהה לכל הדיירים'}
+                  {state.chargeType === 'by_rooms' && 'חיוב לפי מספר חדרים'}
+                  {state.chargeType === 'by_size' && 'חיוב לפי שטח הדירה'}
+                  {state.chargeType === 'by_floor' && 'חיוב לפי קומה'}
+                  {state.chargeType === 'manual' && 'הגדרה ידנית'}
+                </p>
+              </div>
+
+              {state.chargeType === 'uniform' && (
+                <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                  <span className="text-sm font-medium text-gray-700">סכום חודשי</span>
+                  <p className="mt-1 font-semibold text-gray-800">
+                    {(state.data as UniformMonthlyChargeInput).amount} {currency}
+                  </p>
+                </div>
+              )}
+
+              {state.chargeType === 'manual' && (
+                <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                  <span className="text-sm font-medium text-gray-700">דירות מוגדרות</span>
+                  <p className="mt-1 font-semibold text-gray-800">
+                    {((state.data as any).manualConfigs?.length || 0)} דירות
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            פרטי החיוב
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label className="text-sm font-medium">סוג חיוב:</Label>
-            <p className="mt-1">
-              {state.chargeType === 'uniform' && 'חיוב זהה לכל הדיירים'}
-              {state.chargeType === 'by_rooms' && 'חיוב לפי מספר חדרים'}
-              {state.chargeType === 'by_size' && 'חיוב לפי שטח הדירה'}
-              {state.chargeType === 'by_floor' && 'חיוב לפי קומה'}
-              {state.chargeType === 'manual' && 'הגדרה ידנית'}
-            </p>
-          </div>
-
-          <Separator />
-
-          {state.chargeType === 'uniform' && (
-            <div>
-              <Label className="text-sm font-medium">סכום:</Label>
-              <p className="mt-1">{(state.data as UniformMonthlyChargeInput).amount} {currency}</p>
-            </div>
-          )}
-
-          {state.chargeType === 'manual' && (
-            <div>
-              <Label className="text-sm font-medium">דירות מוגדרות:</Label>
-              <p className="mt-1">{((state.data as any).manualConfigs?.length || 0)} דירות</p>
-            </div>
-          )}
-
-          <div>
-            <Label className="text-sm font-medium">חודש התחלה:</Label>
-            <p className="mt-1">{(state.data as any).startPeriod}</p>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
+    );
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
