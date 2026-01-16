@@ -56,6 +56,27 @@ export function MonthlyChargeWizard({
   const t = useTranslations('billing');
   const tCommon = useTranslations('common');
 
+  // יצירת רשימת כל 12 החודשים של השנה הנוכחית
+  const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
+  const months = [];
+  for (let i = 0; i < 12; i++) {
+    const date = new Date(currentYear, i, 1);
+    const monthYearString = `${currentYear}-${String(i + 1).padStart(2, '0')}`;
+    const monthName = date.toLocaleDateString('he-IL', { month: 'long' });
+
+    // בדיקה אם החודש כבר עבר
+    const isPast = date < new Date(currentYear, currentDate.getMonth(), 1);
+
+    months.push({
+      value: monthYearString,
+      monthName,
+      monthNumber: i + 1,
+      isPast,
+      isCurrent: i === currentDate.getMonth()
+    });
+  }
+
   const [state, setState] = useState<WizardState>({
     step: 'type',
     chargeType: null,
@@ -305,27 +326,6 @@ export function MonthlyChargeWizard({
   };
 
   const renderPeriodStep = () => {
-    const currentDate = new Date();
-    const currentYear = currentDate.getFullYear();
-
-    // יצירת רשימת כל 12 החודשים של השנה הנוכחית
-    const months = [];
-    for (let i = 0; i < 12; i++) {
-      const date = new Date(currentYear, i, 1);
-      const monthYearString = `${currentYear}-${String(i + 1).padStart(2, '0')}`;
-      const monthName = date.toLocaleDateString('he-IL', { month: 'long' });
-
-      // בדיקה אם החודש כבר עבר
-      const isPast = date < new Date(currentYear, currentDate.getMonth(), 1);
-
-      months.push({
-        value: monthYearString,
-        monthName,
-        monthNumber: i + 1,
-        isPast,
-        isCurrent: i === currentDate.getMonth()
-      });
-    }
 
     const startPeriod = (state.data as any).startPeriod;
     const endPeriod = (state.data as any).endPeriod;
