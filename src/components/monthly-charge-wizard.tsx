@@ -306,76 +306,73 @@ export function MonthlyChargeWizard({
 
   const renderPeriodStep = () => {
     const currentDate = new Date();
-    const currentMonth = currentDate.getMonth(); // 0-11
     const currentYear = currentDate.getFullYear();
 
-    // יצירת רשימת חודשים - 24 חודשים מהחודש הנוכחי
+    // יצירת רשימת כל 12 החודשים של השנה הנוכחית
     const months = [];
-    for (let i = 0; i < 24; i++) {
-      const date = new Date(currentYear, currentMonth + i, 1);
-      const year = date.getFullYear();
-      const month = date.getMonth();
-      const monthYearString = `${year}-${String(month + 1).padStart(2, '0')}`;
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(currentYear, i, 1);
+      const monthYearString = `${currentYear}-${String(i + 1).padStart(2, '0')}`;
       const monthName = date.toLocaleDateString('he-IL', { month: 'long' });
-      const yearLabel = date.toLocaleDateString('he-IL', { year: 'numeric' });
+
+      // בדיקה אם החודש כבר עבר
+      const isPast = date < new Date(currentYear, currentDate.getMonth(), 1);
 
       months.push({
         value: monthYearString,
         monthName,
-        yearLabel,
-        fullLabel: `${monthName} ${yearLabel}`,
-        isCurrent: i === 0
+        monthNumber: i + 1,
+        isPast,
+        isCurrent: i === currentDate.getMonth()
       });
     }
 
-    const startPeriod = (state.data as any).startPeriod || months[0].value;
-    const endPeriod = (state.data as any).endPeriod || months[11].value; // ברירת מחדל 12 חודשים
+    const startPeriod = (state.data as any).startPeriod;
+    const endPeriod = (state.data as any).endPeriod;
 
-    const handleStartMonthSelect = (monthValue: string) => {
-      const startIndex = months.findIndex(m => m.value === monthValue);
-      const endIndex = months.findIndex(m => m.value === endPeriod);
+    const handleMonthClick = (monthValue: string) => {
+      const clickedIndex = months.findIndex(m => m.value === monthValue);
 
-      // אם החודש ההתחלה מאוחר מהחודש הסיום, הזז גם את הסיום
-      if (startIndex >= endIndex) {
-        const newEndIndex = Math.min(months.length - 1, startIndex + 11); // לפחות 12 חודשים
-        updateData({
-          startPeriod: monthValue,
-          endPeriod: months[newEndIndex].value
-        });
-      } else {
+      // אם החודש עבר, לא ניתן לבחור אותו
+      if (months[clickedIndex].isPast) return;
+
+      // אם אין בחירה עדיין - הגדר כהתחלה
+      if (!startPeriod) {
         updateData({ startPeriod: monthValue });
+        return;
       }
-    };
 
-    const handleEndMonthSelect = (monthValue: string) => {
-      const startIndex = months.findIndex(m => m.value === startPeriod);
-      const endIndex = months.findIndex(m => m.value === monthValue);
-
-      // אם החודש הסיום מוקדם מהחודש ההתחלה, הזז גם את ההתחלה
-      if (endIndex <= startIndex) {
-        const newStartIndex = Math.max(0, endIndex - 11); // לפחות 12 חודשים
-        updateData({
-          startPeriod: months[newStartIndex].value,
-          endPeriod: monthValue
-        });
-      } else {
-        updateData({ endPeriod: monthValue });
+      // אם יש רק התחלה - הגדר כסיום
+      if (startPeriod && !endPeriod) {
+        const startIndex = months.findIndex(m => m.value === startPeriod);
+        if (clickedIndex >= startIndex) {
+          updateData({ endPeriod: monthValue });
+        } else {
+          // אם לחץ על חודש מוקדם יותר - החלף את ההתחלה
+          updateData({ startPeriod: monthValue });
+        }
+        return;
       }
+
+      // אם יש גם התחלה וגם סיום - התחל בחירה חדשה
+      updateData({
+        startPeriod: monthValue,
+        endPeriod: undefined
+      });
     };
-
-    const startIndex = months.findIndex(m => m.value === startPeriod);
-    const endIndex = months.findIndex(m => m.value === endPeriod);
-
-    // חישוב החודשים שיוצגו (6 חודשים לפני ההתחלה ועד 6 חודשים אחרי הסיום)
-    const displayStart = Math.max(0, startIndex - 3);
-    const displayEnd = Math.min(months.length, endIndex + 4);
-    const displayMonths = months.slice(displayStart, displayEnd);
 
     const getMonthStatus = (monthValue: string) => {
       if (monthValue === startPeriod) return 'start';
       if (monthValue === endPeriod) return 'end';
-      const monthIndex = months.findIndex(m => m.value === monthValue);
-      return (monthIndex >= startIndex && monthIndex <= endIndex) ? 'selected' : 'unselected';
+
+      if (startPeriod && endPeriod) {
+        const monthIndex = months.findIndex(m => m.value === monthValue);
+        const startIndex = months.findIndex(m => m.value === startPeriod);
+        const endIndex = months.findIndex(m => m.value === endPeriod);
+        return (monthIndex >= startIndex && monthIndex <= endIndex) ? 'selected' : 'unselected';
+      }
+
+      return 'unselected';
     };
 
     return (
@@ -388,64 +385,65 @@ export function MonthlyChargeWizard({
         <Card>
           <CardContent className="pt-6">
             <div className="space-y-6">
-              {/* Month Range Selector */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="text-center flex-1">
-                    <Label className="text-sm font-medium text-green-700">חודש התחלה</Label>
-                    <div className="text-lg font-semibold mt-1">
-                      {months.find(m => m.value === startPeriod)?.fullLabel}
+              {/* Month Range Selector - Show only when selection exists */}
+              {startPeriod && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="text-center flex-1">
+                      <Label className="text-sm font-medium text-green-700">חודש התחלה</Label>
+                      <div className="text-lg font-semibold mt-1">
+                        {months.find(m => m.value === startPeriod)?.monthName}
+                      </div>
+                    </div>
+
+                    <div className="px-4">
+                      <div className="w-8 h-0.5 bg-border"></div>
+                    </div>
+
+                    <div className="text-center flex-1">
+                      <Label className="text-sm font-medium text-red-700">חודש אחרון</Label>
+                      <div className="text-lg font-semibold mt-1">
+                        {endPeriod ? months.find(m => m.value === endPeriod)?.monthName : 'טרם נבחר'}
+                      </div>
                     </div>
                   </div>
 
-                  <div className="px-4">
-                    <div className="w-8 h-0.5 bg-border"></div>
-                  </div>
-
-                  <div className="text-center flex-1">
-                    <Label className="text-sm font-medium text-red-700">חודש אחרון</Label>
-                    <div className="text-lg font-semibold mt-1">
-                      {months.find(m => m.value === endPeriod)?.fullLabel}
+                  {/* Visual Range Indicator */}
+                  {endPeriod && (
+                    <div className="flex items-center justify-center">
+                      <div className="flex items-center space-x-1 bg-muted p-3 rounded-lg">
+                        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                        <div className="text-sm text-muted-foreground">התחלה</div>
+                        <div className="w-8 h-0.5 bg-primary mx-2"></div>
+                        <div className="text-sm text-muted-foreground">
+                          {months.findIndex(m => m.value === endPeriod) - months.findIndex(m => m.value === startPeriod) + 1} חודשים
+                        </div>
+                        <div className="w-8 h-0.5 bg-primary mx-2"></div>
+                        <div className="text-sm text-muted-foreground">סיום</div>
+                        <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
+              )}
 
-                {/* Visual Range Indicator */}
-                <div className="flex items-center justify-center">
-                  <div className="flex items-center space-x-1 bg-muted p-3 rounded-lg">
-                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                    <div className="text-sm text-muted-foreground">התחלה</div>
-                    <div className="w-8 h-0.5 bg-primary mx-2"></div>
-                    <div className="text-sm text-muted-foreground">
-                      {endIndex - startIndex + 1} חודשים
-                    </div>
-                    <div className="w-8 h-0.5 bg-primary mx-2"></div>
-                    <div className="text-sm text-muted-foreground">סיום</div>
-                    <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Month Grid */}
+              {/* Month Grid - Always show all 12 months */}
               <div className="space-y-4">
                 <Label className="text-center block">בחר חודשים</Label>
 
                 <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                  {displayMonths.map((month) => {
+                  {months.map((month) => {
                     const status = getMonthStatus(month.value);
 
                     return (
                       <div key={month.value} className="space-y-2">
                         <button
-                          onClick={() => {
-                            if (status === 'start' || status === 'selected') {
-                              handleStartMonthSelect(month.value);
-                            } else {
-                              handleEndMonthSelect(month.value);
-                            }
-                          }}
+                          onClick={() => handleMonthClick(month.value)}
+                          disabled={month.isPast}
                           className={`w-full p-3 rounded-lg border-2 transition-all text-center ${
-                            status === 'start'
+                            month.isPast
+                              ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                              : status === 'start'
                               ? 'bg-green-500 text-white border-green-500 shadow-md'
                               : status === 'end'
                               ? 'bg-red-500 text-white border-red-500 shadow-md'
@@ -455,7 +453,10 @@ export function MonthlyChargeWizard({
                           }`}
                         >
                           <div className="text-sm font-medium">{month.monthName}</div>
-                          <div className="text-xs opacity-75">{month.yearLabel}</div>
+                          <div className="text-xs opacity-75">{currentYear}</div>
+                          {month.isCurrent && (
+                            <div className="text-xs text-yellow-600 font-semibold">החודש</div>
+                          )}
                         </button>
 
                         {status === 'start' && (
@@ -470,7 +471,11 @@ export function MonthlyChargeWizard({
                 </div>
 
                 <div className="text-center space-y-2">
-                  <div className="flex justify-center space-x-4 text-sm">
+                  <div className="flex justify-center flex-wrap gap-4 text-sm">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 bg-gray-100 rounded-full border border-gray-200"></div>
+                      <span>חודש שעבר</span>
+                    </div>
                     <div className="flex items-center space-x-2">
                       <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                       <span>חודש התחלה</span>
@@ -485,7 +490,7 @@ export function MonthlyChargeWizard({
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    לחץ על חודש כדי להגדיר אותו כחודש התחלה או סיום
+                    לחץ על חודש זמין כדי לבחור טווח חיובים
                   </p>
                 </div>
               </div>
