@@ -570,8 +570,8 @@ export function MonthlyChargeWizard({
           <div>
             {state.step !== 'type' && (
               <Button variant="outline" onClick={handleBack} disabled={loading}>
-                <ChevronLeft className="h-4 w-4 mr-2" />
                 חזור
+                <ChevronRight className="h-4 w-4 ml-2" />
               </Button>
             )}
           </div>
@@ -588,8 +588,8 @@ export function MonthlyChargeWizard({
               </Button>
             ) : (
               <Button onClick={handleNext} disabled={!canProceed()}>
+                <ChevronLeft className="h-4 w-4 mr-2" />
                 המשך
-                <ChevronRight className="h-4 w-4 ml-2" />
               </Button>
             )}
           </div>
