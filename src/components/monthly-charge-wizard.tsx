@@ -303,34 +303,132 @@ export function MonthlyChargeWizard({
     }
   };
 
-  const renderPeriodStep = () => (
-    <div className="space-y-6">
-      <div className="text-center">
-        <h3 className="text-lg font-semibold mb-2">בחר תאריך התחלה</h3>
-        <p className="text-muted-foreground">מתי להתחיל לגבות את החיובים החודשיים</p>
-      </div>
+  const renderPeriodStep = () => {
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth(); // 0-11
+    const currentYear = currentDate.getFullYear();
 
-      <Card>
-        <CardContent className="pt-6">
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="startPeriod">חודש התחלה</Label>
-              <Input
-                id="startPeriod"
-                type="month"
-                value={(state.data as any).startPeriod || ''}
-                onChange={(e) => updateData({ startPeriod: e.target.value })}
-                className="mt-1"
-              />
-              <p className="text-sm text-muted-foreground mt-1">
-                בחר את החודש הראשון שבו יתחילו החיובים
-              </p>
+    // יצירת רשימת חודשים - 12 חודשים מהחודש הנוכחי
+    const months = [];
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(currentYear, currentMonth + i, 1);
+      const year = date.getFullYear();
+      const month = date.getMonth();
+      const monthYearString = `${year}-${String(month + 1).padStart(2, '0')}`;
+      const monthName = date.toLocaleDateString('he-IL', { year: 'numeric', month: 'long' });
+
+      months.push({
+        value: monthYearString,
+        label: monthName,
+        isCurrent: i === 0
+      });
+    }
+
+    const selectedPeriod = (state.data as any).startPeriod || months[0].value;
+
+    const handleMonthSelect = (monthValue: string) => {
+      updateData({ startPeriod: monthValue });
+    };
+
+    const getMonthIndex = (monthValue: string) => {
+      return months.findIndex(m => m.value === monthValue);
+    };
+
+    const navigateMonth = (direction: 'prev' | 'next') => {
+      const currentIndex = getMonthIndex(selectedPeriod);
+      let newIndex;
+
+      if (direction === 'prev') {
+        newIndex = Math.max(0, currentIndex - 1);
+      } else {
+        newIndex = Math.min(months.length - 1, currentIndex + 1);
+      }
+
+      handleMonthSelect(months[newIndex].value);
+    };
+
+    const selectedMonthIndex = getMonthIndex(selectedPeriod);
+    const visibleMonths = months.slice(
+      Math.max(0, selectedMonthIndex - 1),
+      Math.min(months.length, selectedMonthIndex + 2)
+    );
+
+    return (
+      <div className="space-y-6">
+        <div className="text-center">
+          <h3 className="text-lg font-semibold mb-2">בחר תאריך התחלה</h3>
+          <p className="text-muted-foreground">מתי להתחיל לגבות את החיובים החודשיים</p>
+        </div>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="space-y-4">
+              <div>
+                <Label>חודש התחלה</Label>
+
+                {/* Month Carousel */}
+                <div className="mt-3">
+                  <div className="flex items-center justify-center gap-4">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => navigateMonth('prev')}
+                      disabled={selectedMonthIndex === 0}
+                      className="h-10 w-10"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </Button>
+
+                    <div className="flex gap-2 min-w-[300px] justify-center">
+                      {visibleMonths.map((month, index) => {
+                        const isSelected = month.value === selectedPeriod;
+                        const isVisible = Math.abs(index - 1) <= 1; // Show max 3 months
+
+                        return (
+                          <button
+                            key={month.value}
+                            onClick={() => handleMonthSelect(month.value)}
+                            className={`px-4 py-2 rounded-lg border transition-all text-center min-w-[120px] ${
+                              isSelected
+                                ? 'bg-primary text-primary-foreground border-primary shadow-md'
+                                : 'bg-background hover:bg-muted border-border hover:border-primary/20'
+                            } ${!isVisible ? 'opacity-50' : ''}`}
+                          >
+                            <div className="text-sm font-medium">
+                              {month.label}
+                            </div>
+                            {month.isCurrent && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                (החודש הנוכחי)
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => navigateMonth('next')}
+                      disabled={selectedMonthIndex === months.length - 1}
+                      className="h-10 w-10"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </Button>
+                  </div>
+                </div>
+
+                <p className="text-sm text-muted-foreground mt-3 text-center">
+                  בחר את החודש הראשון שבו יתחילו החיובים
+                </p>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
 
   const renderSummaryStep = () => (
     <div className="space-y-6">
@@ -445,6 +543,15 @@ function UniformConfigStep({
   updateData: (updates: Partial<MonthlyChargeWizardInput>) => void;
   currency: string;
 }) {
+  const getCurrencySymbol = (curr: string) => {
+    switch (curr) {
+      case 'ILS': return '₪';
+      case 'USD': return '$';
+      case 'EUR': return '€';
+      default: return curr;
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="text-center">
@@ -458,7 +565,9 @@ function UniformConfigStep({
             <div>
               <Label htmlFor="amount">סכום חודשי</Label>
               <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
+                  {getCurrencySymbol(currency)}
+                </span>
                 <Input
                   id="amount"
                   type="number"
@@ -467,9 +576,6 @@ function UniformConfigStep({
                   onChange={(e) => updateData({ amount: parseFloat(e.target.value) || 0 })}
                   className="pl-10"
                 />
-                <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
-                  {currency}
-                </span>
               </div>
             </div>
 
@@ -480,6 +586,16 @@ function UniformConfigStep({
                 placeholder="דמי ועד חודשיים"
                 value={(data as UniformMonthlyChargeInput).title || ''}
                 onChange={(e) => updateData({ title: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="description">תיאור</Label>
+              <Input
+                id="description"
+                placeholder="תיאור מפורט של החיוב"
+                value={(data as UniformMonthlyChargeInput).description || ''}
+                onChange={(e) => updateData({ description: e.target.value })}
               />
             </div>
           </div>
