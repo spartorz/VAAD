@@ -131,7 +131,7 @@ async function calculateCharges(
             amount: data.amount,
             currency,
             period,
-            dueDate,
+            dueDate: dueDate.toISOString(),
             status: 'open',
           });
         }
@@ -155,7 +155,7 @@ async function calculateCharges(
               amount: config.amount,
               currency,
               period,
-              dueDate,
+              dueDate: dueDate.toISOString(),
               status: 'open',
             });
           }
@@ -198,7 +198,7 @@ async function calculateCharges(
               amount: Math.round(amount * 100) / 100, // Round to 2 decimal places
               currency,
               period,
-              dueDate,
+              dueDate: dueDate.toISOString(),
               status: 'open',
             });
           }
@@ -228,7 +228,7 @@ async function calculateCharges(
               amount: config.amount,
               currency,
               period,
-              dueDate,
+              dueDate: dueDate.toISOString(),
               status: 'open',
             });
           }
@@ -252,7 +252,7 @@ async function calculateCharges(
               amount: config.amount,
               currency,
               period,
-              dueDate,
+              dueDate: dueDate.toISOString(),
               status: 'open',
             });
           }
