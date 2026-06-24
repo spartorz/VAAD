@@ -78,10 +78,12 @@ async function parseRequest(request: NextRequest) {
     return { error: parsed.error.errors[0]?.message || 'Invalid payload' } as const;
   }
 
-  const file = formData.get('file');
-  if (file && !(file instanceof File)) {
+  const fileEntry = formData.get('file');
+  if (fileEntry && !(fileEntry instanceof File)) {
     return { error: 'Invalid file payload' } as const;
   }
+  const file = fileEntry instanceof File ? fileEntry : null;
+
   if (file && !file.name.toLowerCase().endsWith('.xlsx')) {
     return { error: 'Invalid file type. Please upload an Excel file (.xlsx)' } as const;
   }
@@ -89,7 +91,7 @@ async function parseRequest(request: NextRequest) {
   return {
     dryRun,
     payload: parsed.data,
-    file: file instanceof File ? file : null,
+    file,
   } as const;
 }
 
