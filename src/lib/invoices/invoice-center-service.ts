@@ -1,4 +1,5 @@
 import { Types } from 'mongoose';
+import type { PipelineStage } from 'mongoose';
 import MaintenanceTicket from '@/models/MaintenanceTicket';
 
 export type InvoiceFileStatus = 'invoice_attached' | 'missing_invoice_file' | 'broken_file_reference';
@@ -118,7 +119,7 @@ function buildTablePipeline({
   search?: string;
   page: number;
   limit: number;
-}) {
+}): PipelineStage[] {
   const match: Record<string, unknown> = {
     buildingId: buildingObjectId,
     costAmount: { $gt: 0 },
@@ -137,7 +138,7 @@ function buildTablePipeline({
 
   const escapedSearch = parseSearch(search);
 
-  const pipeline: Record<string, unknown>[] = [
+  const pipeline: PipelineStage[] = [
     { $match: match },
     {
       $lookup: {
