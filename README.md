@@ -108,23 +108,32 @@ A production-ready MVP for managing building committees and HOAs. Built with Nex
    openssl rand -base64 32
    ```
 
-4. **Seed the database**
-   ```bash
-   npm run seed
-   ```
-
-5. **Start the development server**
+4. **Start the development server**
    ```bash
    npm run dev
    ```
 
-6. **Open the application**
+5. **Open the application**
    
    Visit [http://localhost:3000](http://localhost:3000)
 
-### Demo Accounts
+6. **Initialize system**
+   - On a new empty database, the app redirects to `/setup`
+   - Complete the setup wizard to create the first building and admin user
 
-After seeding, use these accounts (password: `demo123`):
+### Development Seed (Optional)
+
+For local development only, you may create demo data:
+
+```bash
+npm run seed
+```
+
+Never use seed scripts as a production setup path.
+
+### Demo Accounts (seeded development only)
+
+After running the optional seed script, use these accounts (password: `demo123`):
 
 | Email | Role | Access |
 |-------|------|--------|

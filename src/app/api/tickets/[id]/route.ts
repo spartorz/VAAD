@@ -6,12 +6,15 @@ import MaintenanceTicket from '@/models/MaintenanceTicket';
 import Apartment from '@/models/Apartment';
 import Vendor from '@/models/Vendor';
 import User from '@/models/User';
+import Document from '@/models/Document';
 import { Types } from 'mongoose';
+import { evaluateSlaFlags } from '@/lib/tickets/sla-service';
 
 // Ensure models are registered for populate
 void Apartment;
 void Vendor;
 void User;
+void Document;
 
 // GET /api/tickets/[id] - Get single ticket
 export const GET = withAuth(async (request, { user, params }) => {
@@ -28,6 +31,7 @@ export const GET = withAuth(async (request, { user, params }) => {
     .populate('apartmentId', 'number floor')
     .populate('createdBy', 'name email')
     .populate('vendorId', 'name category phone email')
+    .populate('invoiceDocumentId', 'title visibility file metadata createdAt')
     .populate('timeline.byUserId', 'name')
     .lean();
 
@@ -41,6 +45,12 @@ export const GET = withAuth(async (request, { user, params }) => {
     const isApartmentTicket = ticket.apartmentId && canAccessApartment(user, ticket.apartmentId._id.toString());
     if (!isCreator && !isApartmentTicket) {
       return errorResponse('Permission denied', 403);
+    }
+
+    // Do not expose vendor invoices to residents by default.
+    const invoiceDoc = ticket.invoiceDocumentId as { visibility?: string } | undefined;
+    if (invoiceDoc && invoiceDoc.visibility === 'board_only') {
+      delete (ticket as Record<string, unknown>).invoiceDocumentId;
     }
   }
 
@@ -100,6 +110,9 @@ export const PATCH = withAuth(async (request, { user, params }) => {
     if (['resolved', 'closed'].includes(validation.data.status) && !ticket.resolvedAt) {
       ticket.resolvedAt = new Date();
     }
+    if (validation.data.status === 'in_progress' && !ticket.firstInProgressAt) {
+      ticket.firstInProgressAt = new Date();
+    }
   }
 
   // Update fields
@@ -108,10 +121,31 @@ export const PATCH = withAuth(async (request, { user, params }) => {
   if (validation.data.priority) ticket.priority = validation.data.priority;
   if (validation.data.status) ticket.status = validation.data.status;
   // Handle vendorId - allow null to unset
+  const previousVendorId = ticket.vendorId?.toString();
   if ('vendorId' in body) {
     ticket.vendorId = body.vendorId ? new Types.ObjectId(body.vendorId) : undefined;
+    if (!body.vendorId && previousVendorId) {
+      ticket.timeline.push({
+        byUserId: new Types.ObjectId(user.id),
+        byUserName: user.name,
+        message: 'Vendor assignment removed',
+        createdAt: new Date(),
+      });
+    }
   }
   if (validation.data.attachments) ticket.attachments = validation.data.attachments;
+
+  const slaFlags = evaluateSlaFlags({
+    now: new Date(),
+    responseDueAt: ticket.responseDueAt,
+    resolutionDueAt: ticket.resolutionDueAt,
+    firstAssignedAt: ticket.firstAssignedAt,
+    resolvedAt: ticket.resolvedAt,
+  });
+  if (typeof slaFlags.responseMet !== 'undefined') ticket.responseMet = slaFlags.responseMet;
+  if (typeof slaFlags.resolutionMet !== 'undefined') ticket.resolutionMet = slaFlags.resolutionMet;
+  ticket.slaBreached = slaFlags.slaBreached;
+  ticket.slaBreachReason = slaFlags.slaBreachReason;
 
   await ticket.save();
 
@@ -125,6 +159,19 @@ export const PATCH = withAuth(async (request, { user, params }) => {
     before,
     after: ticket.toObject(),
   });
+
+  const nextVendorId = ticket.vendorId?.toString();
+  if ('vendorId' in body && previousVendorId && !nextVendorId) {
+    await createAuditLog({
+      buildingId: user.buildingId,
+      actorUserId: user.id,
+      actorName: user.name,
+      action: 'ticket_vendor_unassigned',
+      entityType: 'ticket',
+      entityId: ticket._id.toString(),
+      metadata: { previousVendorId },
+    });
+  }
 
   return successResponse(ticket);
 });

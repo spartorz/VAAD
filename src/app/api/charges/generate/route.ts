@@ -1,4 +1,3 @@
-import { NextRequest } from 'next/server';
 import { withAuth, successResponse, errorResponse, createAuditLog } from '@/lib/api-utils';
 import { generateChargesSchema } from '@/lib/validations';
 import { canManageFinances } from '@/lib/auth';
@@ -26,13 +25,19 @@ export const POST = withAuth(async (request, { user }) => {
   const { period, amount, title } = validation.data;
   let { dueDate } = validation.data;
 
-  // Get building settings for due date if not provided
+  // Get building settings for due date/currency defaults
+  const building = await Building.findById(user.buildingId).lean();
+  if (!building) {
+    return errorResponse('Building not found', 404);
+  }
+
   if (!dueDate) {
-    const building = await Building.findById(user.buildingId);
-    const dueDay = building?.settings?.dueDay || 1;
+    const dueDay = building.settings?.dueDay || 1;
     const [year, month] = period.split('-').map(Number);
     dueDate = new Date(year, month - 1, dueDay);
   }
+
+  const chargeCurrency = building.settings?.currency || 'ILS';
 
   // Get all active apartments
   const apartments = await Apartment.find({
@@ -75,7 +80,7 @@ export const POST = withAuth(async (request, { user }) => {
       type: 'monthly_due',
       title: title || 'Monthly Maintenance Fee',
       amount,
-      currency: 'USD',
+      currency: chargeCurrency,
       period,
       dueDate,
       status: 'open',

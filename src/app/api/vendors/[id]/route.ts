@@ -3,6 +3,7 @@ import { withAuth, successResponse, errorResponse, createAuditLog } from '@/lib/
 import { vendorUpdateSchema } from '@/lib/validations';
 import { canManageBuilding } from '@/lib/auth';
 import Vendor from '@/models/Vendor';
+import MaintenanceTicket from '@/models/MaintenanceTicket';
 import { Types } from 'mongoose';
 
 // GET /api/vendors/[id] - Get single vendor
@@ -54,6 +55,7 @@ export const PATCH = withAuth(async (request, { user, params }) => {
   }
 
   const before = vendor.toObject();
+  const wasActive = vendor.isActive !== false;
   Object.assign(vendor, validation.data);
   await vendor.save();
 
@@ -67,6 +69,18 @@ export const PATCH = withAuth(async (request, { user, params }) => {
     before,
     after: vendor.toObject(),
   });
+
+  if (wasActive && vendor.isActive === false) {
+    await createAuditLog({
+      buildingId: user.buildingId,
+      actorUserId: user.id,
+      actorName: user.name,
+      action: 'vendor_deactivated',
+      entityType: 'vendor',
+      entityId: vendor._id.toString(),
+      metadata: { vendorName: vendor.name },
+    });
+  }
 
   return successResponse(vendor);
 });
@@ -90,6 +104,15 @@ export const DELETE = withAuth(async (request, { user, params }) => {
 
   if (!vendor) {
     return errorResponse('Vendor not found', 404);
+  }
+
+  const openLinkedTickets = await MaintenanceTicket.countDocuments({
+    buildingId: new Types.ObjectId(user.buildingId),
+    vendorId: new Types.ObjectId(id),
+    status: { $nin: ['closed'] },
+  });
+  if (openLinkedTickets > 0) {
+    return errorResponse('Cannot delete vendor with open linked tickets. Deactivate instead.', 409);
   }
 
   const before = vendor.toObject();

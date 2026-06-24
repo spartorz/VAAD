@@ -21,7 +21,7 @@ const buildingSchema = new Schema<IBuilding>(
     address: { type: String, required: true, trim: true },
     city: { type: String, required: true, trim: true },
     country: { type: String, required: true, trim: true },
-    timezone: { type: String, default: 'UTC' },
+    timezone: { type: String, default: 'Asia/Jerusalem' },
     bankInfo: {
       bankName: String,
       accountNumber: String,

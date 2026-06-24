@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { Header } from '@/components/layout/header';
 import { DataTable } from '@/components/data-table';
 import { Button } from '@/components/ui/button';
@@ -44,6 +45,11 @@ interface Vendor {
   contractStart?: string;
   contractEnd?: string;
   notes?: string;
+  isActive?: boolean;
+  serviceTypes?: string[];
+  slaTier?: 'standard' | 'priority' | 'critical';
+  contactHours?: string;
+  rating?: number;
   createdAt: string;
 }
 
@@ -66,6 +72,29 @@ export default function VendorsPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [isPerformanceOpen, setIsPerformanceOpen] = useState(false);
+  const [performanceLoading, setPerformanceLoading] = useState(false);
+  const [performance, setPerformance] = useState<{
+    metrics: {
+      assignedCount: number;
+      openCount: number;
+      closedCount: number;
+      avgResolutionHours: number;
+      slaBreachCount: number;
+      slaBreachRate: number;
+      totalInvoicedAmount: number;
+      invoicesCount: number;
+    };
+    recentInvoices?: Array<{
+      ticketId: string;
+      ticketTitle: string;
+      invoiceNumber?: string | null;
+      invoiceDate?: string | null;
+      amount?: number | null;
+      currency?: string;
+      closedAt?: string | null;
+    }>;
+  } | null>(null);
 
   const fetchVendors = useCallback(async () => {
     setLoading(true);
@@ -107,6 +136,14 @@ export default function VendorsPage() {
       contractStart: formData.get('contractStart') || undefined,
       contractEnd: formData.get('contractEnd') || undefined,
       notes: formData.get('notes') || undefined,
+      isActive: formData.get('isActive') === 'on',
+      serviceTypes: String(formData.get('serviceTypes') || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+      slaTier: formData.get('slaTier') || undefined,
+      contactHours: formData.get('contactHours') || undefined,
+      rating: formData.get('rating') ? Number(formData.get('rating')) : undefined,
     };
 
     try {
@@ -145,6 +182,14 @@ export default function VendorsPage() {
       contractStart: formData.get('contractStart') || undefined,
       contractEnd: formData.get('contractEnd') || undefined,
       notes: formData.get('notes') || undefined,
+      isActive: formData.get('isActive') === 'on',
+      serviceTypes: String(formData.get('serviceTypes') || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+      slaTier: formData.get('slaTier') || undefined,
+      contactHours: formData.get('contactHours') || undefined,
+      rating: formData.get('rating') ? Number(formData.get('rating')) : undefined,
     };
 
     try {
@@ -187,6 +232,25 @@ export default function VendorsPage() {
     }
   };
 
+  const handleOpenPerformance = async (vendor: Vendor) => {
+    setSelectedVendor(vendor);
+    setIsPerformanceOpen(true);
+    setPerformanceLoading(true);
+    try {
+      const response = await fetch(`/api/vendors/${vendor._id}/performance`);
+      const result = await response.json();
+      if (result.success) {
+        setPerformance(result.data);
+      } else {
+        toast.error(result.error || 'Failed to fetch performance');
+      }
+    } catch {
+      toast.error('Failed to fetch performance');
+    } finally {
+      setPerformanceLoading(false);
+    }
+  };
+
   const columns: ColumnDef<Vendor>[] = [
     {
       accessorKey: 'name',
@@ -212,6 +276,16 @@ export default function VendorsPage() {
       ),
     },
     {
+      accessorKey: 'isActive',
+      header: 'Status',
+      cell: ({ row }) =>
+        row.original.isActive === false ? (
+          <Badge variant="secondary">Inactive</Badge>
+        ) : (
+          <Badge variant="outline" className="text-green-700 border-green-300">Active</Badge>
+        ),
+    },
+    {
       accessorKey: 'phone',
       header: 'Phone',
       cell: ({ row }) => row.original.phone ? (
@@ -235,6 +309,9 @@ export default function VendorsPage() {
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => { setSelectedVendor(row.original); setIsEditOpen(true); }}>
               <Pencil className="mr-2 h-4 w-4" />Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleOpenPerformance(row.original)}>
+              Performance
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => handleDelete(row.original._id)} className="text-red-600">
               <Trash2 className="mr-2 h-4 w-4" />Delete
@@ -271,6 +348,10 @@ export default function VendorsPage() {
                   <div className="grid gap-2">
                     <Label>Name *</Label>
                     <Input name="name" required placeholder="Company Name" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input name="isActive" type="checkbox" defaultChecked />
+                    <Label>Active</Label>
                   </div>
                   <div className="grid gap-2">
                     <Label>Category *</Label>
@@ -311,6 +392,33 @@ export default function VendorsPage() {
                     <Label>Notes</Label>
                     <Textarea name="notes" placeholder="Additional notes..." />
                   </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label>Service Types</Label>
+                      <Input name="serviceTypes" placeholder="elevator, emergency" />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Contact Hours</Label>
+                      <Input name="contactHours" placeholder="Sun-Thu 08:00-17:00" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label>SLA Tier</Label>
+                      <Select name="slaTier" defaultValue="standard">
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="standard">Standard</SelectItem>
+                          <SelectItem value="priority">Priority</SelectItem>
+                          <SelectItem value="critical">Critical</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Rating</Label>
+                      <Input name="rating" type="number" min="0" max="5" step="0.1" placeholder="4.5" />
+                    </div>
+                  </div>
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
@@ -342,6 +450,10 @@ export default function VendorsPage() {
                 <div className="grid gap-2">
                   <Label>Name *</Label>
                   <Input name="name" required defaultValue={selectedVendor?.name} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input name="isActive" type="checkbox" defaultChecked={selectedVendor?.isActive !== false} />
+                  <Label>Active</Label>
                 </div>
                 <div className="grid gap-2">
                   <Label>Category *</Label>
@@ -382,6 +494,33 @@ export default function VendorsPage() {
                   <Label>Notes</Label>
                   <Textarea name="notes" defaultValue={selectedVendor?.notes} />
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label>Service Types</Label>
+                    <Input name="serviceTypes" defaultValue={(selectedVendor?.serviceTypes || []).join(', ')} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Contact Hours</Label>
+                    <Input name="contactHours" defaultValue={selectedVendor?.contactHours} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label>SLA Tier</Label>
+                    <Select name="slaTier" defaultValue={selectedVendor?.slaTier || 'standard'}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="standard">Standard</SelectItem>
+                        <SelectItem value="priority">Priority</SelectItem>
+                        <SelectItem value="critical">Critical</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Rating</Label>
+                    <Input name="rating" type="number" min="0" max="5" step="0.1" defaultValue={selectedVendor?.rating} />
+                  </div>
+                </div>
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>Cancel</Button>
@@ -390,6 +529,54 @@ export default function VendorsPage() {
                 </Button>
               </DialogFooter>
             </form>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isPerformanceOpen} onOpenChange={setIsPerformanceOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Vendor Performance</DialogTitle>
+              <DialogDescription>{selectedVendor?.name}</DialogDescription>
+            </DialogHeader>
+            {performanceLoading ? (
+              <div className="py-8 flex justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>
+            ) : performance ? (
+              <div className="space-y-4 py-2">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>Assigned Tickets</div><div className="font-semibold">{performance.metrics.assignedCount}</div>
+                  <div>Open Tickets</div><div className="font-semibold">{performance.metrics.openCount}</div>
+                  <div>Closed Tickets</div><div className="font-semibold">{performance.metrics.closedCount}</div>
+                  <div>Avg Resolution (hours)</div><div className="font-semibold">{performance.metrics.avgResolutionHours}</div>
+                  <div>SLA Breaches</div><div className="font-semibold">{performance.metrics.slaBreachCount}</div>
+                  <div>SLA Breach Rate</div><div className="font-semibold">{performance.metrics.slaBreachRate}%</div>
+                  <div>Total Invoiced</div><div className="font-semibold">{performance.metrics.totalInvoicedAmount.toLocaleString()} ILS</div>
+                  <div>Invoices Count</div><div className="font-semibold">{performance.metrics.invoicesCount}</div>
+                </div>
+
+                <div className="space-y-2 border-t pt-3">
+                  <p className="text-sm font-medium">Recent Invoices</p>
+                  {performance.recentInvoices?.length ? (
+                    <div className="space-y-2">
+                      {performance.recentInvoices.map((invoice) => (
+                        <div key={invoice.ticketId} className="text-xs rounded border p-2">
+                          <p className="font-medium">{invoice.ticketTitle}</p>
+                          <p className="text-muted-foreground">
+                            #{invoice.invoiceNumber || '-'} | {invoice.amount ?? '-'} {invoice.currency || 'ILS'}
+                          </p>
+                          <Link href={`/tickets/${invoice.ticketId}`} className="text-blue-600 hover:underline">
+                            Open ticket
+                          </Link>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">No invoices yet</p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground py-4">No performance data</p>
+            )}
           </DialogContent>
         </Dialog>
       </div>

@@ -15,6 +15,13 @@ export interface IResident extends Document {
   moveOutNote?: string;
   createdAt: Date;
   updatedAt: Date;
+  /**
+   * WhatsApp Business messaging consent.
+   * undefined / missing = consent presumed (backward-compatible for existing residents).
+   * true = resident has explicitly opted in.
+   * false = resident has explicitly opted out — skip for whatsapp_api sends.
+   */
+  whatsappOptIn?: boolean;
 }
 
 const residentSchema = new Schema<IResident>(
@@ -29,6 +36,8 @@ const residentSchema = new Schema<IResident>(
     moveInAt: { type: Date, default: Date.now },
     moveOutAt: { type: Date, default: null },
     moveOutNote: { type: String, trim: true },
+    // No schema default: missing field is treated as "consent assumed" (backward compat)
+    whatsappOptIn: { type: Boolean },
   },
   {
     timestamps: true,

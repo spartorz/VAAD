@@ -4,6 +4,7 @@ import dbConnect from './db';
 import User from '@/models/User';
 import Resident from '@/models/Resident';
 import { SessionUser, UserRole } from './types';
+import { createSecurityAuditLog } from './security-audit';
 
 declare module 'next-auth' {
   interface Session {
@@ -56,11 +57,23 @@ export const authOptions: NextAuthOptions = {
         }
 
         if (!user) {
+          // Security audit — email not found; do not reveal this to the caller
+          createSecurityAuditLog({
+            action: 'login_failed',
+            metadata: { reason: 'user_not_found', emailHint: credentials.email.slice(0, 3) + '***' },
+          });
           throw new Error('Invalid credentials');
         }
 
         // Check if user account is active
         if (user.isActive === false) {
+          createSecurityAuditLog({
+            action: 'login_failed',
+            buildingId: user.buildingId.toString(),
+            actorUserId: user._id.toString(),
+            actorName: user.name,
+            metadata: { reason: 'account_disabled' },
+          });
           throw new Error('Account is disabled. Please contact building management.');
         }
 
@@ -72,12 +85,24 @@ export const authOptions: NextAuthOptions = {
         }
 
         if (!isValid) {
+          createSecurityAuditLog({
+            action: 'login_failed',
+            buildingId: user.buildingId.toString(),
+            actorUserId: user._id.toString(),
+            actorName: user.name,
+            metadata: { reason: 'invalid_password' },
+          });
           throw new Error('Invalid credentials');
         }
 
-        // Update last login
-        user.lastLoginAt = new Date();
-        await user.save();
+        // Update last login using updateOne to bypass all pre-save hooks.
+        // Never call user.save() here — the pre-save hook re-hashes passwordHash
+        // whenever Mongoose considers the field "modified" after model re-initialization
+        // (Mongoose v9 change-tracking behavior). updateOne targets only lastLoginAt.
+        await User.updateOne(
+          { _id: user._id },
+          { $set: { lastLoginAt: new Date() } }
+        );
 
         // Get apartment ID if user is a resident
         let apartmentId: string | undefined;
@@ -85,6 +110,15 @@ export const authOptions: NextAuthOptions = {
           const resident = await Resident.findById(user.residentId);
           apartmentId = resident?.apartmentId?.toString();
         }
+
+        // Security audit — successful login
+        createSecurityAuditLog({
+          action: 'login_success',
+          buildingId: user.buildingId.toString(),
+          actorUserId: user._id.toString(),
+          actorName: user.name,
+          metadata: { role: user.role },
+        });
 
         return {
           id: user._id.toString(),

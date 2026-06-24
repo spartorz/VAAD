@@ -6,6 +6,7 @@ import Apartment from '@/models/Apartment';
 import Vendor from '@/models/Vendor';
 import User from '@/models/User';
 import { Types } from 'mongoose';
+import { calculateSlaDueDates, getEffectiveSlaPolicy } from '@/lib/tickets/sla-service';
 
 // Ensure models are registered for populate (side-effect imports)
 void Apartment;
@@ -157,10 +158,25 @@ export const POST = withAuth(async (request, { user }) => {
   }
 
   try {
+    const policy = await getEffectiveSlaPolicy(user.buildingId);
+    const createdAt = new Date();
+    const dueDates = calculateSlaDueDates({
+      createdAt,
+      priority: validation.data.priority,
+      policy,
+    });
+
     const ticketData: Record<string, unknown> = {
       ...validation.data,
       buildingId: new Types.ObjectId(user.buildingId),
       createdBy: new Types.ObjectId(user.id),
+      responseDueAt: dueDates.responseDueAt,
+      resolutionDueAt: dueDates.resolutionDueAt,
+      slaSource: 'ticket_sla_policy',
+      slaPolicyVersion: policy.version,
+      responseMet: undefined,
+      resolutionMet: undefined,
+      slaBreached: false,
       timeline: [{
         byUserId: new Types.ObjectId(user.id),
         byUserName: user.name,

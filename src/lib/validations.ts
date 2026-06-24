@@ -9,7 +9,7 @@ export const buildingSchema = z.object({
   address: z.string().min(1, 'Address is required').max(200),
   city: z.string().min(1, 'City is required').max(100),
   country: z.string().min(1, 'Country is required').max(100),
-  timezone: z.string().default('UTC'),
+  timezone: z.string().default('Asia/Jerusalem'),
   bankInfo: z.object({
     bankName: z.string().optional(),
     accountNumber: z.string().optional(),
@@ -105,6 +105,18 @@ export const loginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 });
 
+export const forgotPasswordSchema = z.object({
+  email: z.string().email('Invalid email'),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, 'Reset token is required'),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .max(128, 'Password is too long'),
+});
+
 // Charge Validation
 export const chargeSchema = z.object({
   buildingId: objectIdSchema,
@@ -112,7 +124,7 @@ export const chargeSchema = z.object({
   type: z.enum(['monthly_due', 'one_time', 'repair', 'fund']),
   title: z.string().min(1, 'Title is required').max(200),
   amount: z.number().positive('Amount must be positive'),
-  currency: z.string().default('USD'),
+  currency: z.string().default('ILS'),
   period: z.string().regex(/^\d{4}-\d{2}$/, 'Period must be YYYY-MM format').optional().nullable(),
   dueDate: z.string().or(z.date()).transform((val) => new Date(val)),
   status: z.enum(['open', 'voided']).default('open'),
@@ -128,6 +140,31 @@ export const generateChargesSchema = z.object({
   amount: z.number().positive('Amount must be positive'),
   title: z.string().min(1, 'Title is required').max(200).default('Monthly Maintenance Fee'),
   dueDate: z.string().or(z.date()).transform((val) => new Date(val)).optional(),
+});
+
+export const autoBillingSettingsSchema = z.object({
+  autoBillingEnabled: z.boolean().default(false),
+  monthlyAmount: z.number().min(0).optional(),
+  currency: z.string().min(1).max(10).optional(),
+  chargeDayOfMonth: z.number().int().min(1).max(28).default(1),
+  dueDayOfMonth: z.number().int().min(1).max(28).default(10),
+  descriptionTemplate: z.string().min(1).max(300).default('דמי ועד בית עבור {period}'),
+  requireApprovalBeforeGeneration: z.boolean().default(true),
+  activeApartmentStatuses: z.array(z.string()).min(1).default(['active']),
+});
+
+export const autoBillingPreviewSchema = z.object({
+  period: z.string().regex(/^\d{4}-\d{2}$/, 'Period must be YYYY-MM format').optional(),
+  excludeApartmentIds: z.array(objectIdSchema).optional(),
+  monthlyAmountOverride: z.number().min(0).optional(),
+});
+
+export const autoBillingRunSchema = z.object({
+  period: z.string().regex(/^\d{4}-\d{2}$/, 'Period must be YYYY-MM format').optional(),
+  excludeApartmentIds: z.array(objectIdSchema).optional(),
+  monthlyAmountOverride: z.number().min(0).optional(),
+  confirm: z.boolean().default(false),
+  mode: z.enum(['manual', 'cron']).default('manual'),
 });
 
 // Payment Validation
@@ -170,6 +207,28 @@ export const ticketCommentSchema = z.object({
   message: z.string().min(1, 'Message is required').max(1000),
 });
 
+export const ticketAssignVendorSchema = z.object({
+  vendorId: objectIdSchema,
+  setWaitingVendorStatus: z.boolean().default(true),
+});
+
+export const ticketSlaPolicySchema = z.object({
+  responseTargetsMinutes: z.object({
+    low: z.number().int().min(1),
+    medium: z.number().int().min(1),
+    high: z.number().int().min(1),
+    urgent: z.number().int().min(1),
+  }),
+  resolutionTargetsMinutes: z.object({
+    low: z.number().int().min(1),
+    medium: z.number().int().min(1),
+    high: z.number().int().min(1),
+    urgent: z.number().int().min(1),
+  }),
+  gracePeriodMinutes: z.number().int().min(0).default(0),
+  businessHoursOnly: z.boolean().default(false),
+});
+
 // Vendor Validation
 export const vendorSchema = z.object({
   buildingId: objectIdSchema,
@@ -180,6 +239,11 @@ export const vendorSchema = z.object({
   contractStart: z.string().or(z.date()).transform((val) => new Date(val)).optional(),
   contractEnd: z.string().or(z.date()).transform((val) => new Date(val)).optional(),
   notes: z.string().max(1000).optional(),
+  isActive: z.boolean().default(true),
+  serviceTypes: z.array(z.string().max(60)).default([]),
+  slaTier: z.enum(['standard', 'priority', 'critical']).optional(),
+  contactHours: z.string().max(200).optional(),
+  rating: z.number().min(0).max(5).optional(),
   documents: z.array(z.object({
     url: z.string(),
     name: z.string(),
@@ -200,6 +264,7 @@ export const documentSchema = z.object({
     mimeType: z.string(),
     size: z.number(),
   }),
+  metadata: z.record(z.unknown()).optional(),
 });
 
 export const documentUpdateSchema = documentSchema.partial().omit({ buildingId: true, file: true });
@@ -226,5 +291,7 @@ export type TicketInput = z.infer<typeof ticketSchema>;
 export type VendorInput = z.infer<typeof vendorSchema>;
 export type DocumentInput = z.infer<typeof documentSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type PaginationInput = z.infer<typeof paginationSchema>;
 

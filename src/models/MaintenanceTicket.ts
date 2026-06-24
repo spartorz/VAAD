@@ -21,8 +21,20 @@ export interface IMaintenanceTicket extends Document {
   closedByUserId?: Types.ObjectId;
   resolutionNotes?: string;
   invoiceDocumentId?: Types.ObjectId;
+  invoiceNumber?: string;
+  invoiceDate?: Date;
   costAmount?: number;
   costCurrency?: string;
+  responseDueAt?: Date;
+  resolutionDueAt?: Date;
+  firstAssignedAt?: Date;
+  firstInProgressAt?: Date;
+  responseMet?: boolean;
+  resolutionMet?: boolean;
+  slaBreached?: boolean;
+  slaBreachReason?: string;
+  slaSource?: string;
+  slaPolicyVersion?: number;
 }
 
 const attachmentSchema = new Schema({
@@ -65,8 +77,20 @@ const maintenanceTicketSchema = new Schema<IMaintenanceTicket>(
     closedByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
     resolutionNotes: { type: String, maxlength: 2000 },
     invoiceDocumentId: { type: Schema.Types.ObjectId, ref: 'Document' },
+    invoiceNumber: { type: String, trim: true, maxlength: 120 },
+    invoiceDate: Date,
     costAmount: { type: Number, min: 0 },
     costCurrency: { type: String, default: 'ILS' },
+    responseDueAt: Date,
+    resolutionDueAt: Date,
+    firstAssignedAt: Date,
+    firstInProgressAt: Date,
+    responseMet: Boolean,
+    resolutionMet: Boolean,
+    slaBreached: Boolean,
+    slaBreachReason: String,
+    slaSource: String,
+    slaPolicyVersion: Number,
   },
   {
     timestamps: true,

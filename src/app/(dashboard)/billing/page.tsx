@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import Link from 'next/link';
 import { Header } from '@/components/layout/header';
 import { DataTable } from '@/components/data-table';
 import { Button } from '@/components/ui/button';
@@ -74,12 +75,51 @@ interface Payment {
   createdAt: string;
 }
 
+interface AutoBillingSettingsData {
+  autoBillingEnabled: boolean;
+  monthlyAmount?: number;
+  currency: string;
+  chargeDayOfMonth: number;
+  dueDayOfMonth: number;
+  descriptionTemplate: string;
+  requireApprovalBeforeGeneration: boolean;
+  activeApartmentStatuses: string[];
+  lastAutoBillingRunAt?: string;
+  nextAutoBillingRunAt?: string;
+}
+
+interface AutoBillingPreviewData {
+  period: string;
+  currency: string;
+  dueDate: string;
+  eligibleCount: number;
+  skippedCount: number;
+  totalAmount: number;
+  eligibleApartments: Array<{
+    apartmentId: string;
+    apartmentNumber: string;
+    floor?: number;
+    status: string;
+    amount?: number;
+  }>;
+  skippedApartments: Array<{
+    apartmentId: string;
+    apartmentNumber: string;
+    floor?: number;
+    status: string;
+    reason?: string;
+  }>;
+}
+
 export default function BillingPage() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
   const t = useTranslations('billing');
   const isResident = session?.user?.role === 'RESIDENT';
+  const canManageAutoBilling = ['ADMIN', 'BOARD', 'TREASURER', 'MANAGEMENT'].includes(session?.user?.role || '');
   const defaultTab = searchParams.get('tab') || (isResident ? 'charges' : 'monthly');
+  const periodParam = searchParams.get('period');
+  const requestedPeriod = periodParam && /^\d{4}-\d{2}$/.test(periodParam) ? periodParam : undefined;
   
   const [apartments, setApartments] = useState<Apartment[]>([]);
   const [activeTab, setActiveTab] = useState(defaultTab);
@@ -108,12 +148,13 @@ export default function BillingPage() {
             <TabsTrigger value="charges">{t('charges')}</TabsTrigger>
             <TabsTrigger value="payments">{t('payments')}</TabsTrigger>
             {!isResident && <TabsTrigger value="generate">{t('generateCharges')}</TabsTrigger>}
+            {canManageAutoBilling && <TabsTrigger value="autoBilling">{t('autoBillingTitle')}</TabsTrigger>}
             {isResident && <TabsTrigger value="statement">{t('myStatement')}</TabsTrigger>}
           </TabsList>
 
           {!isResident && (
             <TabsContent value="monthly">
-              <MonthlyOverviewTab />
+              <MonthlyOverviewTab initialPeriod={requestedPeriod} />
             </TabsContent>
           )}
 
@@ -127,7 +168,13 @@ export default function BillingPage() {
 
           {!isResident && (
             <TabsContent value="generate">
-              <GenerateChargesTab />
+              <GenerateChargesTab initialPeriod={requestedPeriod} />
+            </TabsContent>
+          )}
+
+          {canManageAutoBilling && (
+            <TabsContent value="autoBilling">
+              <AutoBillingTab initialPeriod={requestedPeriod} />
             </TabsContent>
           )}
 
@@ -617,10 +664,9 @@ function PaymentsTab({ apartments, isResident }: { apartments: Apartment[]; isRe
   );
 }
 
-function GenerateChargesTab() {
+function GenerateChargesTab({ initialPeriod }: { initialPeriod?: string }) {
   const t = useTranslations('billing');
   const tCommon = useTranslations('common');
-  const tValidation = useTranslations('validation');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ created: number; skipped: number } | null>(null);
 
@@ -658,8 +704,8 @@ function GenerateChargesTab() {
     }
   };
 
-  const currentMonth = new Date().toISOString().slice(0, 7);
   const nextMonth = new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString().slice(0, 7);
+  const defaultPeriod = initialPeriod || nextMonth;
 
   return (
     <Card className="max-w-lg">
@@ -676,7 +722,7 @@ function GenerateChargesTab() {
         <form onSubmit={handleGenerate} className="space-y-4">
           <div className="grid gap-2">
             <Label>{t('period')} (YYYY-MM) *</Label>
-            <Input name="period" required pattern="\d{4}-\d{2}" defaultValue={nextMonth} placeholder="2024-01" />
+            <Input name="period" required pattern="\d{4}-\d{2}" defaultValue={defaultPeriod} placeholder="2024-01" />
           </div>
           <div className="grid gap-2">
             <Label>{t('amountPerApartment')} *</Label>
@@ -712,12 +758,353 @@ function GenerateChargesTab() {
   );
 }
 
+function AutoBillingTab({ initialPeriod }: { initialPeriod?: string }) {
+  const t = useTranslations('billing');
+  const tCommon = useTranslations('common');
+  const tErrors = useTranslations('errors');
+  const [settings, setSettings] = useState<AutoBillingSettingsData | null>(null);
+  const [preview, setPreview] = useState<AutoBillingPreviewData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [runLoading, setRunLoading] = useState(false);
+  const [confirmRun, setConfirmRun] = useState(false);
+  const [period, setPeriod] = useState(() => {
+    if (initialPeriod && /^\d{4}-\d{2}$/.test(initialPeriod)) return initialPeriod;
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+
+  const fetchSettings = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/billing/auto-settings');
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Failed to fetch settings');
+      setSettings(result.data);
+    } catch (error) {
+      toast.error(tErrors('loadFailed'));
+    } finally {
+      setLoading(false);
+    }
+  }, [tErrors]);
+
+  useEffect(() => {
+    fetchSettings();
+  }, [fetchSettings]);
+
+  const handleSaveSettings = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!settings) return;
+    setSaving(true);
+    try {
+      const response = await fetch('/api/billing/auto-settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Failed to save settings');
+      setSettings(result.data);
+      toast.success(t('autoBillingSettingsSaved'));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : tErrors('generic'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePreview = async () => {
+    setPreviewLoading(true);
+    try {
+      const response = await fetch('/api/billing/auto-billing/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period }),
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Preview failed');
+      setPreview(result.data);
+      toast.success(t('autoBillingPreviewReady'));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : tErrors('generic'));
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleRunNow = async () => {
+    if (!confirmRun) {
+      toast.error(t('autoBillingConfirmRequired'));
+      return;
+    }
+
+    setRunLoading(true);
+    try {
+      const response = await fetch('/api/billing/auto-billing/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period, confirm: true, mode: 'manual' }),
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Run failed');
+
+      const data = result.data as {
+        approvalRequired: boolean;
+        createdCount: number;
+        skippedCount: number;
+      };
+      if (data.approvalRequired) {
+        toast.message(t('autoBillingApprovalRequiredMessage'));
+      } else {
+        toast.success(
+          t('autoBillingRunDone', {
+            created: String(data.createdCount),
+            skipped: String(data.skippedCount),
+          })
+        );
+      }
+      setConfirmRun(false);
+      await fetchSettings();
+      await handlePreview();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : tErrors('generic'));
+    } finally {
+      setRunLoading(false);
+    }
+  };
+
+  const getSkipReasonLabel = (reason?: string) => {
+    if (reason === 'inactive_apartment') return t('autoBillingSkipInactive');
+    if (reason === 'charge_already_exists') return t('autoBillingSkipExisting');
+    if (reason === 'missing_billing_amount') return t('autoBillingSkipMissingAmount');
+    if (reason === 'apartment_excluded') return t('autoBillingSkipExcluded');
+    return reason || '-';
+  };
+
+  if (loading || !settings) {
+    return (
+      <div className="flex items-center justify-center py-10">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('autoBillingTitle')}</CardTitle>
+          <CardDescription>{t('autoBillingDescription')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSaveSettings} className="space-y-4">
+            <div className="flex items-center gap-2">
+              <input
+                id="autoBillingEnabled"
+                type="checkbox"
+                checked={settings.autoBillingEnabled}
+                onChange={(e) => setSettings((prev) => (prev ? { ...prev, autoBillingEnabled: e.target.checked } : prev))}
+              />
+              <Label htmlFor="autoBillingEnabled">{t('autoBillingEnabled')}</Label>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>{t('amountPerApartment')}</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={settings.monthlyAmount ?? ''}
+                  onChange={(e) =>
+                    setSettings((prev) =>
+                      prev ? { ...prev, monthlyAmount: e.target.value ? Number(e.target.value) : undefined } : prev
+                    )
+                  }
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>{t('autoBillingCurrency')}</Label>
+                <Input
+                  value={settings.currency}
+                  onChange={(e) => setSettings((prev) => (prev ? { ...prev, currency: e.target.value } : prev))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>{t('autoBillingChargeDay')}</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={28}
+                  value={settings.chargeDayOfMonth}
+                  onChange={(e) => setSettings((prev) => (prev ? { ...prev, chargeDayOfMonth: Number(e.target.value) } : prev))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>{t('autoBillingDueDay')}</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={28}
+                  value={settings.dueDayOfMonth}
+                  onChange={(e) => setSettings((prev) => (prev ? { ...prev, dueDayOfMonth: Number(e.target.value) } : prev))}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label>{tCommon('description')}</Label>
+              <Input
+                value={settings.descriptionTemplate}
+                onChange={(e) => setSettings((prev) => (prev ? { ...prev, descriptionTemplate: e.target.value } : prev))}
+                placeholder="דמי ועד בית עבור {period}"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                id="requireApproval"
+                type="checkbox"
+                checked={settings.requireApprovalBeforeGeneration}
+                onChange={(e) =>
+                  setSettings((prev) =>
+                    prev ? { ...prev, requireApprovalBeforeGeneration: e.target.checked } : prev
+                  )
+                }
+              />
+              <Label htmlFor="requireApproval">{t('autoBillingRequireApproval')}</Label>
+            </div>
+
+            <div className="text-xs text-muted-foreground">
+              {settings.lastAutoBillingRunAt && (
+                <p>{t('autoBillingLastRun')}: {formatDate(settings.lastAutoBillingRunAt)}</p>
+              )}
+              {settings.nextAutoBillingRunAt && (
+                <p>{t('autoBillingNextRun')}: {formatDate(settings.nextAutoBillingRunAt)}</p>
+              )}
+            </div>
+
+            <Button type="submit" disabled={saving}>
+              {saving && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
+              {t('autoBillingSaveSettings')}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('autoBillingPreviewTitle')}</CardTitle>
+          <CardDescription>{t('autoBillingPreviewDesc')}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="grid gap-2">
+              <Label>{t('period')}</Label>
+              <Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} />
+            </div>
+            <Button onClick={handlePreview} disabled={previewLoading}>
+              {previewLoading && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
+              {t('autoBillingPreviewButton')}
+            </Button>
+          </div>
+
+          {!!preview && (
+            <div className="rounded-lg border p-4 space-y-3">
+              <p className="text-sm">
+                {t('autoBillingPreviewSummary', {
+                  period: preview.period,
+                  eligible: String(preview.eligibleCount),
+                  skipped: String(preview.skippedCount),
+                })}
+              </p>
+              <p className="text-sm font-medium">
+                {t('autoBillingPreviewTotal')}: {formatCurrency(preview.totalAmount, preview.currency)}
+              </p>
+
+              {!preview.eligibleCount && (
+                <p className="text-sm text-amber-700">{t('autoBillingNoEligible')}</p>
+              )}
+
+              {!!preview.skippedApartments.length && (
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">{t('autoBillingSkippedList')}</p>
+                  <div className="max-h-48 overflow-auto rounded border p-2 text-sm space-y-1">
+                    {preview.skippedApartments.map((apt) => (
+                      <div key={apt.apartmentId} className="flex items-center justify-between gap-2">
+                        <span>{t('autoBillingApartmentLabel')} {apt.apartmentNumber}</span>
+                        <Badge variant="secondary">{getSkipReasonLabel(apt.reason)}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('autoBillingRunNowTitle')}</CardTitle>
+          <CardDescription>{t('autoBillingRunNowDesc')}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-2">
+            <input id="confirmRun" type="checkbox" checked={confirmRun} onChange={(e) => setConfirmRun(e.target.checked)} />
+            <Label htmlFor="confirmRun">{t('autoBillingRunConfirmLabel')}</Label>
+          </div>
+          <Button onClick={handleRunNow} disabled={runLoading || !settings.autoBillingEnabled}>
+            {runLoading && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
+            {t('autoBillingRunNowButton')}
+          </Button>
+          {!settings.autoBillingEnabled && (
+            <p className="text-xs text-muted-foreground">{t('autoBillingDisabledHint')}</p>
+          )}
+          {!settings.monthlyAmount && (
+            <p className="text-xs text-amber-700">{t('autoBillingMissingAmountHint')}</p>
+          )}
+          {!!preview && preview.eligibleCount === 0 && (
+            <p className="text-xs text-muted-foreground">
+              {t('autoBillingNoApartmentsHint')}{' '}
+              <Link href="/apartments" className="underline">
+                {t('autoBillingGoToApartments')}
+              </Link>
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+interface StatementEntry {
+  _id: string;
+  date: string;
+  type: 'charge' | 'payment';
+  title: string;
+  amount: number;
+  balance: number;
+  status: 'open' | 'voided' | 'confirmed' | 'pending';
+  reference?: string;
+}
+
+interface StatementData {
+  apartment?: { number?: string };
+  balance?: {
+    totalCharges: number;
+    totalPayments: number;
+    balance: number;
+  };
+  statement?: StatementEntry[];
+}
+
 function StatementTab({ apartmentId }: { apartmentId?: string }) {
   const router = useRouter();
   const t = useTranslations('billing');
   const tInvoice = useTranslations('invoice');
   const tCommon = useTranslations('common');
-  const [statement, setStatement] = useState<any>(null);
+  const [statement, setStatement] = useState<StatementData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -783,7 +1170,7 @@ function StatementTab({ apartmentId }: { apartmentId?: string }) {
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {statement?.statement?.map((entry: any) => (
+            {statement?.statement?.map((entry) => (
               <div key={entry._id} className="flex items-center justify-between py-3 border-b last:border-0">
                 <div className="flex-1">
                   <p className="font-medium">{entry.title}</p>
@@ -849,9 +1236,10 @@ interface MonthlySummary {
   noChargeCount: number;
 }
 
-function MonthlyOverviewTab() {
+function MonthlyOverviewTab({ initialPeriod }: { initialPeriod?: string }) {
   const { t, tCommon, tApartments, tSuccess, tErrors } = useBillingTranslations();
   const [period, setPeriod] = useState(() => {
+    if (initialPeriod && /^\d{4}-\d{2}$/.test(initialPeriod)) return initialPeriod;
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });

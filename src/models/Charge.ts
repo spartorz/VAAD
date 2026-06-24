@@ -29,7 +29,7 @@ const chargeSchema = new Schema<ICharge>(
     },
     title: { type: String, required: true, trim: true },
     amount: { type: Number, required: true, min: 0 },
-    currency: { type: String, default: 'USD' },
+    currency: { type: String, default: 'ILS' },
     period: { type: String, default: null }, // YYYY-MM format
     dueDate: { type: Date, required: true },
     status: { type: String, enum: ['open', 'voided'], default: 'open' },

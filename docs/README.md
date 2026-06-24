@@ -32,9 +32,19 @@ npm run build
 # Start production server
 npm start
 
-# Seed database with demo data
+# Seed database with demo data (development only)
 npm run seed
 ```
+
+## First-Run Production Setup
+
+When deploying with an empty production database:
+
+1. Deploy the app.
+2. Open the app URL.
+3. Complete `/setup` wizard.
+
+Do not use seed scripts for production onboarding.
 
 ## ⚠️ Seed Script Warning
 

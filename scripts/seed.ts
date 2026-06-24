@@ -7,9 +7,10 @@
 
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import dotenv from 'dotenv';
 
 // Load environment variables
-require('dotenv').config({ path: '.env.local' });
+dotenv.config({ path: '.env.local' });
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
@@ -25,7 +26,7 @@ const buildingSchema = new mongoose.Schema({
   address: String,
   city: String,
   country: String,
-  timezone: { type: String, default: 'UTC' },
+  timezone: { type: String, default: 'Asia/Jerusalem' },
   bankInfo: {
     bankName: String,
     accountNumber: String,
@@ -77,7 +78,7 @@ const chargeSchema = new mongoose.Schema({
   type: { type: String, enum: ['monthly_due', 'one_time', 'repair', 'fund'], required: true },
   title: { type: String, required: true },
   amount: { type: Number, required: true },
-  currency: { type: String, default: 'USD' },
+  currency: { type: String, default: 'ILS' },
   period: String,
   dueDate: { type: Date, required: true },
   status: { type: String, enum: ['open', 'voided'], default: 'open' },

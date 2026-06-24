@@ -70,6 +70,7 @@ export default function TicketsPage() {
   const tCommon = useTranslations('common');
   const tErrors = useTranslations('errors');
   const isResident = session?.user?.role === 'RESIDENT';
+  const canManageSla = ['ADMIN', 'BOARD', 'MANAGEMENT'].includes(session?.user?.role || '');
   
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [apartments, setApartments] = useState<Apartment[]>([]);
@@ -79,6 +80,13 @@ export default function TicketsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
+  const [slaLoading, setSlaLoading] = useState(false);
+  const [slaPolicy, setSlaPolicy] = useState({
+    responseTargetsMinutes: { low: 1440, medium: 480, high: 240, urgent: 60 },
+    resolutionTargetsMinutes: { low: 10080, medium: 4320, high: 1440, urgent: 360 },
+    gracePeriodMinutes: 0,
+    businessHoursOnly: false,
+  });
 
   const fetchTickets = useCallback(async () => {
     setLoading(true);
@@ -114,7 +122,41 @@ export default function TicketsPage() {
           if (result.success) setApartments(result.data.data);
         });
     }
-  }, [fetchTickets, isResident]);
+
+    if (canManageSla) {
+      fetch('/api/tickets/sla-policy')
+        .then((r) => r.json())
+        .then((result) => {
+          if (result.success) {
+            setSlaPolicy({
+              responseTargetsMinutes: result.data.responseTargetsMinutes,
+              resolutionTargetsMinutes: result.data.resolutionTargetsMinutes,
+              gracePeriodMinutes: result.data.gracePeriodMinutes || 0,
+              businessHoursOnly: Boolean(result.data.businessHoursOnly),
+            });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [fetchTickets, isResident, canManageSla]);
+
+  const handleSaveSla = async () => {
+    setSlaLoading(true);
+    try {
+      const response = await fetch('/api/tickets/sla-policy', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(slaPolicy),
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Failed to save SLA policy');
+      toast.success('SLA policy updated');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save SLA policy');
+    } finally {
+      setSlaLoading(false);
+    }
+  };
 
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -239,6 +281,124 @@ export default function TicketsPage() {
       <Header title={t('title')} />
       
       <div className="flex-1 p-4 lg:p-6 space-y-4">
+        {canManageSla && (
+          <div className="rounded-lg border p-4 bg-muted/20">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold">SLA Policy</h3>
+              <Button size="sm" onClick={handleSaveSla} disabled={slaLoading}>
+                {slaLoading && <Loader2 className="ms-2 h-4 w-4 animate-spin" />}
+                Save SLA
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+              <div className="space-y-1">
+                <Label>Response Low (min)</Label>
+                <Input
+                  type="number"
+                  value={slaPolicy.responseTargetsMinutes.low}
+                  onChange={(e) =>
+                    setSlaPolicy((prev) => ({
+                      ...prev,
+                      responseTargetsMinutes: { ...prev.responseTargetsMinutes, low: Number(e.target.value) },
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Response Medium (min)</Label>
+                <Input
+                  type="number"
+                  value={slaPolicy.responseTargetsMinutes.medium}
+                  onChange={(e) =>
+                    setSlaPolicy((prev) => ({
+                      ...prev,
+                      responseTargetsMinutes: { ...prev.responseTargetsMinutes, medium: Number(e.target.value) },
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Response High (min)</Label>
+                <Input
+                  type="number"
+                  value={slaPolicy.responseTargetsMinutes.high}
+                  onChange={(e) =>
+                    setSlaPolicy((prev) => ({
+                      ...prev,
+                      responseTargetsMinutes: { ...prev.responseTargetsMinutes, high: Number(e.target.value) },
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Response Urgent (min)</Label>
+                <Input
+                  type="number"
+                  value={slaPolicy.responseTargetsMinutes.urgent}
+                  onChange={(e) =>
+                    setSlaPolicy((prev) => ({
+                      ...prev,
+                      responseTargetsMinutes: { ...prev.responseTargetsMinutes, urgent: Number(e.target.value) },
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Resolution Low (min)</Label>
+                <Input
+                  type="number"
+                  value={slaPolicy.resolutionTargetsMinutes.low}
+                  onChange={(e) =>
+                    setSlaPolicy((prev) => ({
+                      ...prev,
+                      resolutionTargetsMinutes: { ...prev.resolutionTargetsMinutes, low: Number(e.target.value) },
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Resolution Medium (min)</Label>
+                <Input
+                  type="number"
+                  value={slaPolicy.resolutionTargetsMinutes.medium}
+                  onChange={(e) =>
+                    setSlaPolicy((prev) => ({
+                      ...prev,
+                      resolutionTargetsMinutes: { ...prev.resolutionTargetsMinutes, medium: Number(e.target.value) },
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Resolution High (min)</Label>
+                <Input
+                  type="number"
+                  value={slaPolicy.resolutionTargetsMinutes.high}
+                  onChange={(e) =>
+                    setSlaPolicy((prev) => ({
+                      ...prev,
+                      resolutionTargetsMinutes: { ...prev.resolutionTargetsMinutes, high: Number(e.target.value) },
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Resolution Urgent (min)</Label>
+                <Input
+                  type="number"
+                  value={slaPolicy.resolutionTargetsMinutes.urgent}
+                  onChange={(e) =>
+                    setSlaPolicy((prev) => ({
+                      ...prev,
+                      resolutionTargetsMinutes: { ...prev.resolutionTargetsMinutes, urgent: Number(e.target.value) },
+                    }))
+                  }
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex gap-2 flex-1">

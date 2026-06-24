@@ -9,6 +9,7 @@ export interface IDocument extends MongoDocument {
   visibility: DocumentVisibility;
   file: FileAttachment;
   createdBy: Types.ObjectId;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
 }
 
@@ -33,6 +34,7 @@ const documentSchema = new Schema<IDocument>(
       size: { type: Number, required: true },
     },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    metadata: { type: Schema.Types.Mixed },
   },
   {
     timestamps: { createdAt: true, updatedAt: false },
