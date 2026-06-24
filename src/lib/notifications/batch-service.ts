@@ -121,7 +121,18 @@ interface SkippedRow {
 
 // ─── Settings helpers ─────────────────────────────────────────────────────
 
-const SETTINGS_DEFAULTS: Omit<INotificationSettings, '_id' | 'buildingId' | 'createdAt' | 'updatedAt'> = {
+type NotificationSettingsDefaults = {
+  paymentRemindersEnabled: boolean;
+  reminderMode: INotificationSettings['reminderMode'];
+  reminderDayOfMonth: number;
+  gracePeriodDays: number;
+  cooldownDays: number;
+  requireApprovalBeforeSending: boolean;
+  skipRecentlyContactedResidents: boolean;
+  activeChannels: NotificationChannel[];
+};
+
+const SETTINGS_DEFAULTS: NotificationSettingsDefaults = {
   paymentRemindersEnabled: true,
   reminderMode: 'manual_only',
   reminderDayOfMonth: 5,
