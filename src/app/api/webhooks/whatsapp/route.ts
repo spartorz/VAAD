@@ -35,14 +35,18 @@ import type { NotificationItemStatus } from '@/lib/types';
 // ─── Status progression order (forward only) ─────────────────────────────────
 
 const STATUS_ORDER: Record<NotificationItemStatus, number> = {
-  pending: 0,
-  queued: 1,
-  sent: 2,
-  delivered: 3,
-  read: 4,
-  opened_manual: 5,
-  failed: 5,
-  cancelled: 5,
+  draft: 0,
+  pending: 1,
+  retrying: 2,
+  queued: 3,
+  sent: 4,
+  delivered: 5,
+  read: 6,
+  failed: 7,
+  cancelled: 8,
+  // Keep legacy manual click support as terminal/highest state so webhook
+  // updates never downgrade or erase explicit "opened in manual flow" tracking.
+  opened_manual: 9,
 };
 
 function isForwardTransition(
