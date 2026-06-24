@@ -16,6 +16,10 @@ void Vendor;
 void User;
 void Document;
 
+type TicketResponseShape = Record<string, unknown> & {
+  invoiceDocumentId?: unknown;
+};
+
 // GET /api/tickets/[id] - Get single ticket
 export const GET = withAuth(async (request, { user, params }) => {
   const id = params?.id;
@@ -39,6 +43,12 @@ export const GET = withAuth(async (request, { user, params }) => {
     return errorResponse('Ticket not found', 404);
   }
 
+  const ticketResponse = (
+    typeof (ticket as { toObject?: unknown }).toObject === 'function'
+      ? (ticket as { toObject: () => unknown }).toObject()
+      : ticket
+  ) as TicketResponseShape;
+
   // Check access for residents
   if (user.role === 'RESIDENT') {
     const isCreator = ticket.createdBy._id.toString() === user.id;
@@ -48,13 +58,14 @@ export const GET = withAuth(async (request, { user, params }) => {
     }
 
     // Do not expose vendor invoices to residents by default.
-    const invoiceDoc = ticket.invoiceDocumentId as { visibility?: string } | undefined;
+    const invoiceDoc = ticketResponse.invoiceDocumentId as { visibility?: string } | undefined;
     if (invoiceDoc && invoiceDoc.visibility === 'board_only') {
-      delete (ticket as Record<string, unknown>).invoiceDocumentId;
+      const { invoiceDocumentId: _hiddenInvoice, ...safeTicketResponse } = ticketResponse;
+      return successResponse(safeTicketResponse);
     }
   }
 
-  return successResponse(ticket);
+  return successResponse(ticketResponse);
 });
 
 // PATCH /api/tickets/[id] - Update ticket
