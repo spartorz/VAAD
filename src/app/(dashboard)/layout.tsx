@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { Sidebar } from '@/components/layout/sidebar';
 import { getSystemInitializationState } from '@/lib/setup/system-init';
 
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardLayout({
   children,
 }: {
