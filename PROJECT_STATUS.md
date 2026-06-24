@@ -651,3 +651,5 @@ All variables should be set in Vercel's project environment settings (or `.env.l
 - Notification delivery analytics (open rates, delivery rates per channel)
 - Building-level dashboard with trend charts
 - Export scheduler (automated monthly report emails to board)
+
+Vercel deployment trigger after successful production build.
